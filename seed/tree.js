@@ -102,7 +102,7 @@ export default function (host) {
       void load();
     },
 
-    /** The Desk remounts chrome when a Type is redefined, so ↻ is the only refresh. */
+    /** The split rebuilds this pane when a Type is redefined; ↻ is the manual one. */
     reload: load,
   };
 }

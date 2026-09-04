@@ -77,15 +77,58 @@ body {
   transform-origin: 0 0;
 }
 
-/* Chrome sits above the canvas and does not pan or zoom. */
-.desk-chrome {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+/* --- split: layout is a Type ---------------------------------------------- */
+
+.split {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.desk-chrome > .pin {
-  pointer-events: auto;
+/* Two classes, because a nested split's box is also a `.split-pane`, which sets a
+   direction of its own. */
+.split.split-row {
+  flex-direction: row;
+}
+
+.split.split-col {
+  flex-direction: column;
+}
+
+.split-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.split-pane.broken {
+  padding: 8px;
+  color: var(--bad);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+.split-bar {
+  flex: 0 0 5px;
+  background: var(--edge);
+}
+
+.split-row > .split-bar {
+  cursor: col-resize;
+}
+
+.split-col > .split-bar {
+  cursor: row-resize;
+}
+
+.split-bar:hover {
+  background: #3d4a63;
 }
 
 /* --- pins ---------------------------------------------------------------- */
@@ -128,15 +171,8 @@ body {
 }
 
 .pin.full .pin-grip,
-.pin.full .pin-resize,
-.pin-fixed .pin-grip,
-.pin-fixed .pin-resize {
+.pin.full .pin-resize {
   display: none;
-}
-
-.pin-fixed {
-  background: #16161b;
-  border-color: var(--edge);
 }
 
 .pin-face {
@@ -269,10 +305,14 @@ body {
 /* --- palette ------------------------------------------------------------- */
 
 .palette {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
+  height: 100%;
+  background: #16161b;
+  border-bottom: 1px solid var(--edge);
 }
 
 .palette-label {
@@ -310,7 +350,7 @@ body {
 
 /* --- desk shell ---------------------------------------------------------- */
 
-/* The Desk is a Type now, so it sizes its own box. */
+/* The Desk is a Type now — one pane among others. */
 .desk {
   display: flex;
   flex-direction: column;
@@ -443,8 +483,11 @@ body {
 /* --- tree ---------------------------------------------------------------- */
 
 .tree {
-  gap: 0;
-  padding: 0;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #16161b;
 }
 
 .tree-head {

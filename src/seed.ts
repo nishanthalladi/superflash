@@ -5,6 +5,7 @@ import stubJs from '../seed/stub.js?raw';
 import paletteJs from '../seed/palette.js?raw';
 import treeJs from '../seed/tree.js?raw';
 import gitPanelJs from '../seed/git-panel.js?raw';
+import splitJs from '../seed/split.js?raw';
 
 /**
  * The seed document: the app as it ships. The Desk, the palette, the Stub — all
@@ -20,6 +21,7 @@ export const FILES: Record<string, string> = {
   'palette.js': paletteJs,
   'tree.js': treeJs,
   'git-panel.js': gitPanelJs,
+  'split.js': splitJs,
 };
 
 const POINTER = /^@([\w.-]+\.js)$/;

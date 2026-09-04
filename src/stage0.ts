@@ -20,6 +20,7 @@ import { safeShell } from './safe';
  * gets nothing beyond read/write self and emit.
  */
 export const POLICY: Record<string, Grant[]> = {
+  split: [SHELL],
   desk: [SHELL, CREATE, TYPES],
   cell: [SHELL, FS, DEFINE, CREATE, TYPES, MACHINE],
   code: [DEFINE],

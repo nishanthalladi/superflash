@@ -32,7 +32,6 @@ describe('round trip', () => {
     k.grants.give(pinA.id, readGrant(shared.id));
     k.modules.add(a.id);
     k.setFocus(pinA.id);
-    k.chrome = shared.id;
 
     const store = memoryStore();
     writeDoc(store, k.toJSON());
@@ -42,7 +41,6 @@ describe('round trip', () => {
     next.load(readDoc(store)!);
 
     expect(next.root).toBe(desk.id);
-    expect(next.chrome).toBe(shared.id);
     expect(next.allNotes()).toHaveLength(3);
     expect(next.allPins()).toHaveLength(3);
     expect(next.body(a.id)).toBe('a body');

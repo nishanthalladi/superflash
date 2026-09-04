@@ -1,8 +1,9 @@
 export const type = { name: 'palette', title: 'Palette' };
 
 /**
- * The toolbar — a Type, pinned on the `chrome` Note. The app's own furniture is
- * a Note like everything else, which is the point.
+ * The toolbar — a Type, a pane in the top of the layout split. The app's own
+ * furniture is a Note like everything else, which is the point: there is no
+ * privileged chrome layer for it to live in.
  *
  * It needs `types` to list what exists; everything it *does* it does by emitting
  * facts the Desk picks up, so it holds no other power.
@@ -54,7 +55,7 @@ export default function (host) {
       draw();
     },
 
-    /** The Desk remounts chrome when the registry changes, but stay honest. */
+    /** The split rebuilds this pane when a Type is redefined, but stay honest. */
     onSpine() {
       draw();
     },

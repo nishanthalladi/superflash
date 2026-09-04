@@ -22,10 +22,9 @@ export type Change =
 
 /** The serialized document. Everything a reload needs; nothing about the view. */
 export interface Doc {
-  version: 1;
+  /** 2 dropped `chrome`: what is always on screen is a `split` Type now. */
+  version: 2;
   root: NoteId;
-  /** The Note whose pins are the app's own chrome. */
-  chrome: NoteId | null;
   notes: Note[];
   pins: Pin[];
   focus: PinId | null;
@@ -60,8 +59,6 @@ export class Kernel implements Undoable {
 
   /** The Note everything else sits on. */
   root: NoteId = '';
-  /** The Note whose pins the Desk draws as fixed chrome. */
-  chrome: NoteId | null = null;
   /** Notes that compile to Types. */
   readonly modules = new Set<NoteId>();
   /**
@@ -303,9 +300,8 @@ export class Kernel implements Undoable {
 
   toJSON(): Doc {
     return {
-      version: 1,
+      version: 2,
       root: this.root,
-      chrome: this.chrome,
       notes: this.allNotes().map((n) => ({ ...n })),
       pins: this.allPins().map((p) => ({ ...p })),
       focus: this.focused,
@@ -338,7 +334,6 @@ export class Kernel implements Undoable {
     for (const m of doc.modules) if (this.notes.has(m)) this.modules.add(m);
 
     this.root = this.notes.has(doc.root) ? doc.root : (doc.notes[0]?.id ?? '');
-    this.chrome = doc.chrome && this.notes.has(doc.chrome) ? doc.chrome : null;
     this.focused = doc.focus && this.pins.has(doc.focus) ? doc.focus : null;
 
     seedIds([...this.notes.keys(), ...this.pins.keys()]);

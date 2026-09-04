@@ -43,14 +43,11 @@ export default function (host) {
   const bar = document.createElement('div');
   const viewport = document.createElement('div');
   const layer = document.createElement('div');
-  const chromeLayer = document.createElement('div');
 
   let current = host.pin.note;
   let trail = [current];
   let armed = 'stub';
   let drag = null;
-
-  const chromeNote = () => kernel.chrome;
 
   // --- view state ----------------------------------------------------------
 
@@ -110,7 +107,7 @@ export default function (host) {
   function open(note) {
     if (note === current || !kernel.hasNote(note)) return;
     kernel.setFocus(null);
-    for (const id of [...boxes.keys()]) if (!isChromePin(id)) drop(id);
+    for (const id of [...boxes.keys()]) drop(id);
     current = note;
     const i = trail.indexOf(note);
     if (i >= 0) trail.length = i + 1;
@@ -125,11 +122,6 @@ export default function (host) {
     trail.pop();
     trail.pop();
     open(parent);
-  }
-
-  function isChromePin(pinId) {
-    const chrome = chromeNote();
-    return chrome !== null && kernel.hasPin(pinId) && kernel.getPin(pinId).parent === chrome;
   }
 
   // --- making things -------------------------------------------------------
@@ -214,14 +206,9 @@ export default function (host) {
 
   function render() {
     const children = kernel.childPins(current);
-    const chrome = chromeNote();
-    const chromePins = chrome ? kernel.childPins(chrome) : [];
-    const alive = new Set([...children, ...chromePins].map((p) => p.id));
+    const alive = new Set(children.map((p) => p.id));
     for (const id of [...boxes.keys()]) if (!alive.has(id)) drop(id);
-
     for (const pin of children) ensure(pin, layer);
-    for (const pin of chromePins) ensure(pin, chromeLayer);
-
     paint();
     paintBar();
   }
@@ -234,7 +221,7 @@ export default function (host) {
     }
 
     const box = document.createElement('div');
-    box.className = parent === chromeLayer ? 'pin pin-fixed' : 'pin';
+    box.className = 'pin';
     box.dataset.pin = pin.id;
     box.dataset.type = pin.type;
 
@@ -284,9 +271,8 @@ export default function (host) {
     layer.style.transform = one ? 'none' : `translate(${c.x}px, ${c.y}px) scale(${c.z})`;
     viewport.classList.toggle('solo', one);
 
-    const chrome = chromeNote();
     const focused = kernel.focus();
-    for (const pin of [...children, ...(chrome ? kernel.childPins(chrome) : [])]) {
+    for (const pin of children) {
       const box = boxes.get(pin.id);
       if (!box) continue;
       const full = one && pin.parent === current;
@@ -489,7 +475,11 @@ export default function (host) {
     });
   }
 
-  /** Chrome talks to the Desk over the Spine, so chrome needs no extra grants. */
+  /**
+   * The toolbar and the tree are panes in the split above this one, not children
+   * of the Desk. They talk to it over the Spine, so they need no extra grants and
+   * the Desk needs no idea where they are.
+   */
   function onFact(fact) {
     const data = fact.data || {};
     switch (fact.name) {
@@ -531,8 +521,7 @@ export default function (host) {
       bar.className = 'desk-bar';
       viewport.className = 'desk-viewport';
       layer.className = 'desk-layer';
-      chromeLayer.className = 'desk-chrome';
-      viewport.append(layer, chromeLayer);
+      viewport.append(layer);
       root.append(bar, viewport);
 
       unwatch.push(
@@ -543,9 +532,6 @@ export default function (host) {
         kernel.spine.subscribeAll(onFact),
         kernel.types.watch(() => {
           paintBar();
-          // Chrome lists the Types, so it has to hear about a new one.
-          const chrome = chromeNote();
-          if (chrome) for (const pin of kernel.childPins(chrome)) drop(pin.id);
           render();
         }),
       );

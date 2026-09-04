@@ -26,9 +26,14 @@ describe('the shell is a Note', () => {
 
     expect(shell).not.toBeNull();
     expect(kernel.childPins(kernel.root)).toHaveLength(1);
-    expect(kernel.getPin(shell!).type).toBe('desk');
-    expect(root.querySelector('.desk-viewport')).not.toBeNull();
-    expect(root.querySelector('.desk-chrome .palette')).not.toBeNull();
+    // The shell is a layout now: a column of [palette, row of [tree, desk]].
+    expect(kernel.getPin(shell!).type).toBe('split');
+    expect(root.classList.contains('split-col')).toBe(true);
+    expect(root.querySelector('.split-pane[data-type="palette"]')).not.toBeNull();
+    // The nested row keeps its pane class as well as its own layout class.
+    const row = root.querySelector<HTMLElement>('.split-pane.split-row')!;
+    expect(row.querySelector('.split-pane[data-type="tree"]')).not.toBeNull();
+    expect(root.querySelector('.split-pane[data-type="desk"] .desk-viewport')).not.toBeNull();
     expect(root.querySelectorAll('.desk-layer > .pin').length).toBeGreaterThanOrEqual(3);
   });
 
@@ -45,10 +50,12 @@ describe('the shell is a Note', () => {
 
   it('gives a pin only the powers its Type is trusted with', async () => {
     const { kernel, shell } = await stage0(host(), memoryStore(), { fs: null });
-    const desk = kernel.getPin(shell!);
+    const desk = kernel.allPins().find((p) => p.type === 'desk')!;
     const cell = kernel.allPins().find((p) => p.type === 'cell')!;
     const stub = kernel.allPins().find((p) => p.type === 'stub')!;
 
+    // A layout only needs to mount and move its own panes.
+    expect(kernel.grants.list(shell!)).toEqual([SHELL]);
     expect(kernel.grants.list(desk.id)).toEqual([SHELL, CREATE, TYPES]);
     expect(kernel.grants.list(cell.id)).toEqual([SHELL, FS, DEFINE, CREATE, TYPES, MACHINE]);
     expect(kernel.grants.list(stub.id)).toEqual([]);
@@ -56,7 +63,7 @@ describe('the shell is a Note', () => {
 });
 
 describe('editing the app from inside the app', () => {
-  it('remounts the shell when its own module is redefined', async () => {
+  it('rebuilds one pane when that pane\'s Type is redefined', async () => {
     const root = host();
     const { kernel } = await stage0(root, memoryStore(), { fs: null });
     const note = moduleNote(kernel, 'desk');
@@ -68,13 +75,31 @@ describe('editing the app from inside the app', () => {
     );
     await kernel.defineModule(note);
 
-    expect(root.textContent).toBe('PATCHED');
+    const pane = root.querySelector<HTMLElement>('.split-pane[data-type="desk"]')!;
+    expect(pane.textContent).toBe('PATCHED');
     expect(root.querySelector('.desk-viewport')).toBeNull();
+    // The panes around it are untouched.
+    expect(root.querySelector('.split-pane[data-type="tree"]')).not.toBeNull();
 
     // The old Desk's window listeners went with it: Cmd+Z is nobody's now.
     const doc = JSON.stringify(kernel.toJSON());
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true }));
     expect(JSON.stringify(kernel.toJSON())).toBe(doc);
+  });
+
+  it('remounts the whole shell when the layout Type is redefined', async () => {
+    const root = host();
+    const { kernel } = await stage0(root, memoryStore(), { fs: null });
+    const note = moduleNote(kernel, 'split');
+
+    kernel.patch(
+      note,
+      `export const type = { name: 'split', title: 'Split' };
+       export default () => ({ mount(box) { box.textContent = 'FLAT'; } });`,
+    );
+    await kernel.defineModule(note);
+
+    expect(root.textContent).toBe('FLAT');
   });
 
   it('runs a Cell and shows what came out', async () => {
@@ -111,7 +136,7 @@ describe('editing the app from inside the app', () => {
 });
 
 describe('the safe shell', () => {
-  it('takes over when the desk module will not compile', async () => {
+  it('leaves the rest of the layout alone when one pane will not compile', async () => {
     const store = memoryStore();
     const first = await stage0(host(), store, { fs: null });
     first.kernel.patch(moduleNote(first.kernel, 'desk'), 'export default function ( {');
@@ -121,8 +146,24 @@ describe('the safe shell', () => {
     const root = host();
     const second = await stage0(root, store, { fs: null });
 
-    expect(second.shell).toBeNull();
+    expect(second.shell).not.toBeNull();
     expect(second.kernel.types.has('desk')).toBe(false);
+    expect(root.querySelector('.split-pane.broken')!.textContent).toContain('desk');
+    expect(root.querySelector('.split-pane[data-type="tree"]')).not.toBeNull();
+  });
+
+  it('takes over when the layout module will not compile', async () => {
+    const store = memoryStore();
+    const first = await stage0(host(), store, { fs: null });
+    first.kernel.patch(moduleNote(first.kernel, 'split'), 'export default function ( {');
+    first.save.flush();
+    first.save.stop();
+
+    const root = host();
+    const second = await stage0(root, store, { fs: null });
+
+    expect(second.shell).toBeNull();
+    expect(second.kernel.types.has('split')).toBe(false);
     expect(root.querySelector('.safe')).not.toBeNull();
     // Every module Note is editable from here, including the broken one.
     expect(root.querySelectorAll('.safe-note textarea').length).toBe(second.kernel.modules.size);
@@ -157,11 +198,12 @@ describe('reload', () => {
   it('?fresh ignores what was stored', async () => {
     const store = memoryStore();
     const first = await stage0(host(), store, { fs: null });
-    for (const p of first.kernel.childPins(first.kernel.getPin(first.shell!).note)) first.kernel.unpin(p.id);
+    const canvas = (k: Kernel) => k.getPin(k.allPins().find((p) => p.type === 'desk')!.id).note;
+    for (const p of first.kernel.childPins(canvas(first.kernel))) first.kernel.unpin(p.id);
     first.save.flush();
     first.save.stop();
 
     const fresh = await stage0(host(), store, { fresh: true, fs: null });
-    expect(fresh.kernel.childPins(fresh.kernel.getPin(fresh.shell!).note).length).toBeGreaterThanOrEqual(3);
+    expect(fresh.kernel.childPins(canvas(fresh.kernel)).length).toBeGreaterThanOrEqual(3);
   });
 });
