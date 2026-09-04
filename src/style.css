@@ -1,0 +1,607 @@
+:root {
+  color-scheme: dark;
+  --ink: #e8e8ea;
+  --dim: #8a8a93;
+  --edge: #2a2a30;
+  --bg: #101013;
+  --bad: #ff8a7a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- bar ----------------------------------------------------------------- */
+
+.desk-bar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--edge);
+  font-size: 12px;
+}
+
+.desk-bar button {
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.desk-info {
+  margin-left: auto;
+  color: var(--dim);
+}
+
+/* --- canvas -------------------------------------------------------------- */
+
+.desk-viewport {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+  background-image: radial-gradient(circle, #1e1e24 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.desk-viewport.solo {
+  background-image: none;
+}
+
+.desk-layer {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+
+/* Chrome sits above the canvas and does not pan or zoom. */
+.desk-chrome {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.desk-chrome > .pin {
+  pointer-events: auto;
+}
+
+/* --- pins ---------------------------------------------------------------- */
+
+.pin {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid hsl(var(--hue, 220) 30% 34%);
+  border-radius: 6px;
+  background: hsl(var(--hue, 220) 24% 13%);
+  overflow: hidden;
+}
+
+.pin.focused {
+  outline: 2px solid hsl(var(--hue, 220) 70% 60%);
+  outline-offset: 1px;
+}
+
+.pin.broken {
+  border-color: var(--bad);
+}
+
+.pin.broken .pin-face {
+  padding: 8px;
+  color: var(--bad);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+
+.pin-grip {
+  flex: none;
+  padding: 3px 6px;
+  border-bottom: 1px solid hsl(var(--hue, 220) 30% 24%);
+  background: hsl(var(--hue, 220) 26% 17%);
+  color: var(--dim);
+  font-size: 10px;
+  cursor: grab;
+  user-select: none;
+}
+
+.pin.full .pin-grip,
+.pin.full .pin-resize,
+.pin-fixed .pin-grip,
+.pin-fixed .pin-resize {
+  display: none;
+}
+
+.pin-fixed {
+  background: #16161b;
+  border-color: var(--edge);
+}
+
+.pin-face {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.pin-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, hsl(var(--hue, 220) 30% 40%) 50%);
+}
+
+/* --- stub ---------------------------------------------------------------- */
+
+.stub-head {
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.stub-body {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 6px;
+  background: #00000040;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.stub-body:focus {
+  outline: none;
+}
+
+.stub-tools {
+  display: flex;
+  gap: 4px;
+}
+
+.stub-tools button,
+.stub-target {
+  background: #00000040;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 10px;
+  padding: 2px 6px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.stub-target {
+  flex: 1;
+  cursor: text;
+}
+
+.stub-log {
+  margin: 0;
+  height: 3.4em;
+  overflow: hidden;
+  color: var(--dim);
+  font-size: 10px;
+  white-space: pre-wrap;
+}
+
+/* --- code ---------------------------------------------------------------- */
+
+.code-source {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 8px;
+  background: #00000055;
+  color: #d7e4ff;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.code-source:focus {
+  outline: none;
+}
+
+.code-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: none;
+}
+
+.code-tools button {
+  background: #23324a;
+  border: 1px solid #35507a;
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.code-status {
+  color: var(--dim);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-status.bad {
+  color: var(--bad);
+}
+
+/* --- palette ------------------------------------------------------------- */
+
+.palette {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+}
+
+.palette-label {
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.palette-list {
+  display: flex;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.palette button {
+  background: #00000040;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 10px;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.palette button.armed {
+  border-color: #6f8fd0;
+  color: #cddcff;
+}
+
+/* Only the first of the "+ x" buttons pushes the group right. */
+.palette-list + .palette-new {
+  margin-left: auto;
+}
+
+/* --- desk shell ---------------------------------------------------------- */
+
+/* The Desk is a Type now, so it sizes its own box. */
+.desk {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* --- cell ---------------------------------------------------------------- */
+
+.cell-source {
+  flex: 1;
+  min-height: 3em;
+  resize: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 8px;
+  background: #00000055;
+  color: #d7e4ff;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.cell-source:focus {
+  outline: none;
+}
+
+.cell-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: none;
+}
+
+.cell-tools button {
+  background: #23324a;
+  border: 1px solid #35507a;
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.cell-status {
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.cell-out {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px 8px;
+  border-top: 1px solid var(--edge);
+  color: #b9f0cf;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.cell-out.bad {
+  color: var(--bad);
+}
+
+.cell-out:empty {
+  display: none;
+}
+
+/* --- safe shell ---------------------------------------------------------- */
+
+.safe {
+  height: 100%;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.safe-head {
+  color: var(--bad);
+}
+
+.safe-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.safe-label {
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.safe textarea {
+  height: 40vh;
+  resize: vertical;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  padding: 8px;
+  background: #00000055;
+  color: #d7e4ff;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.safe-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--dim);
+}
+
+.safe-tools button {
+  background: #23324a;
+  border: 1px solid #35507a;
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+/* --- tree ---------------------------------------------------------------- */
+
+.tree {
+  gap: 0;
+  padding: 0;
+}
+
+.tree-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: none;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.tree-head button {
+  background: #00000040;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 10px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.tree-status {
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.tree-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.tree-dir,
+.tree-file {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  padding: 2px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-dir {
+  color: #b8c8e8;
+}
+
+.tree-file:hover,
+.tree-dir:hover {
+  background: #ffffff10;
+}
+
+/* --- git ----------------------------------------------------------------- */
+
+.git {
+  gap: 6px;
+}
+
+.git-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: none;
+  font-size: 11px;
+}
+
+.git-head button {
+  background: #00000040;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 10px;
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.git-status {
+  color: var(--dim);
+  font-size: 10px;
+}
+
+.git-status.bad {
+  color: var(--bad);
+}
+
+.git-list {
+  flex: none;
+  max-height: 30%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.git-file {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  padding: 1px 4px;
+  cursor: pointer;
+  white-space: pre;
+}
+
+.git-file.armed {
+  background: #ffffff14;
+}
+
+.git-diff {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: #00000055;
+  color: var(--dim);
+  font-size: 10px;
+  white-space: pre;
+}
+
+.git-foot {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.git-message {
+  flex: 1;
+  min-width: 0;
+  background: #00000040;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+
+.git-foot button {
+  background: #23324a;
+  border: 1px solid #35507a;
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
