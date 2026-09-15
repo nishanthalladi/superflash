@@ -1,6 +1,6 @@
 import type { Doc, Kernel } from './kernel';
 
-export const DOC_KEY = 'desk:doc:v2';
+export const DOC_KEY = 'desk:doc:v3';
 export const VIEW_KEY = 'desk:view:v1';
 export const SNAP_KEY = 'desk:snap';
 export const SNAP_KEEP = 5;
@@ -26,9 +26,9 @@ export function readDoc(store: Store, key = DOC_KEY): Doc | null {
   if (!raw) return null;
   try {
     const doc = JSON.parse(raw) as Doc;
-    // A document from before `split` is not worth migrating: the key changed, so
-    // an old one is simply left where it is and the shipped seed boots instead.
-    if (doc.version !== 2 || !Array.isArray(doc.notes) || !Array.isArray(doc.pins)) return null;
+    // An older document is not worth migrating: the key changes with the version,
+    // so an old one is left where it is and the shipped seed boots instead.
+    if (doc.version !== 3 || !Array.isArray(doc.notes) || !Array.isArray(doc.pins)) return null;
     return doc;
   } catch {
     return null;

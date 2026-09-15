@@ -1,28 +1,46 @@
 import { Kernel } from '../src/kernel/kernel';
-import { CREATE, SHELL, TYPES } from '../src/kernel/grants';
+import { CREATE, FS, SHELL, TYPES } from '../src/kernel/grants';
 import type { NoteId, PinId } from '../src/kernel/model';
 import { loadSource } from '../src/kernel/modules';
 import type { TypeFactory, TypeInstance } from '../src/kernel/type';
 import type { FsClient } from '../src/kernel/type';
-import deskJs from '../seed/desk.js?raw';
-import stubJs from '../seed/stub.js?raw';
-import paletteJs from '../seed/palette.js?raw';
+import canvasJs from '../seed/canvas.js?raw';
 import treeJs from '../seed/tree.js?raw';
 import gitPanelJs from '../seed/git-panel.js?raw';
+import splitJs from '../seed/split.js?raw';
 
 /**
- * The Desk, the Stub and the palette are seed Notes now, so tests compile them
- * the same way the app does. If a seed file stops being a valid module, every
- * test that touches the UI fails — which is the point.
+ * The canvas and the tools are seed Notes, so tests compile them the same way the
+ * app does. If a seed file stops being a valid module, every test that touches the
+ * UI fails — which is the point.
  */
 const factory = async (source: string): Promise<TypeFactory> =>
   ((await loadSource(source))['default'] as TypeFactory);
 
-export const stub = await factory(stubJs);
-export const desk = await factory(deskJs);
-export const palette = await factory(paletteJs);
+export const canvas = await factory(canvasJs);
 export const tree = await factory(treeJs);
 export const gitPanel = await factory(gitPanelJs);
+export const split = await factory(splitJs);
+
+/** A Type with no powers and no chrome, for tests that only need something drawn. */
+export const plain: TypeFactory = (host) => {
+  let area: HTMLTextAreaElement;
+  return {
+    mount(el, note) {
+      area = document.createElement('textarea');
+      area.className = 'plain';
+      area.value = note.body;
+      area.addEventListener('input', () => host.write(area.value));
+      el.append(area);
+    },
+    focus() {
+      area.focus();
+    },
+    onPatch(note) {
+      if (area.value !== note.body) area.value = note.body;
+    },
+  };
+};
 
 /**
  * A repo in a Map. Every mtime is a counter, so "changed" is never ambiguous, and
@@ -80,37 +98,56 @@ export async function until(what: () => boolean, tries = 100): Promise<void> {
   throw new Error('condition never became true');
 }
 
-/** Click a Cell's run button and wait for it to settle. Returns the output text. */
-export async function runCell(box: ParentNode): Promise<string> {
-  box.querySelector<HTMLButtonElement>('.cell-tools button')!.click();
-  const status = box.querySelector<HTMLElement>('.cell-status')!;
-  await until(() => status.textContent !== 'running…');
-  return box.querySelector<HTMLElement>('.cell-out')!.textContent ?? '';
+/** Run a box (Shift+Enter) and wait for it to settle. Returns the output text. */
+export async function runBox(el: ParentNode): Promise<string> {
+  const text = el.querySelector<HTMLTextAreaElement>('.box-text')!;
+  const out = el.querySelector<HTMLElement>('.box-out')!;
+  text.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true }));
+  await until(() => out.textContent !== '…');
+  return out.textContent ?? '';
 }
 
 export interface Mounted {
-  instance: TypeInstance & { noteId: NoteId; armed: string; open(note: NoteId): void };
+  instance: TypeInstance & { noteId: NoteId; enter(note: NoteId): void; leave(): void };
   pin: PinId;
 }
 
 /**
- * Mount the Desk on `note` the way `stage0` does: one pin on the root Note,
+ * Mount the canvas on `note` the way `stage0` does: one pin on the root Note,
  * holding `shell`.
  */
-export function mountDesk(kernel: Kernel, root: HTMLElement, note: NoteId): Mounted {
-  // The Desk stores its camera in localStorage, which jsdom shares across tests.
+export function mountCanvas(kernel: Kernel, root: HTMLElement, note: NoteId): Mounted {
+  // The canvas stores its camera in localStorage, which jsdom shares across tests.
   try {
     localStorage.clear();
   } catch {
     // no store, no camera
   }
-  if (!kernel.types.has('desk')) kernel.types.define('desk', desk, { title: 'Desk' });
-  const shell = kernel.createNote('shell');
+  if (!kernel.types.has('canvas')) kernel.types.define('canvas', canvas, { title: 'Canvas' });
+  const shell = kernel.createNote('root');
   kernel.root = shell.id;
-  const pin = kernel.pin(note, shell.id, 'desk');
+  const pin = kernel.pin(note, shell.id, 'canvas');
   kernel.grants.give(pin.id, SHELL, CREATE, TYPES);
-  const instance = kernel.types.get('desk')(kernel.host(pin.id)) as Mounted['instance'];
+  const instance = kernel.types.get('canvas')(kernel.host(pin.id)) as Mounted['instance'];
   kernel.attach(pin.id, instance);
   instance.mount(root, kernel.note(note));
   return { instance, pin: pin.id };
+}
+
+/** Mount one Type on a scratch Note, with the grants the policy would give it. */
+export function mountOne(
+  kernel: Kernel,
+  root: HTMLElement,
+  name: string,
+  factory: TypeFactory,
+  grants: string[] = [FS],
+): { pin: PinId; instance: TypeInstance } {
+  if (!kernel.types.has(name)) kernel.types.define(name, factory, { title: name });
+  const parent = kernel.createNote('parent');
+  const pin = kernel.pin(kernel.createNote('').id, parent.id, name);
+  kernel.grants.give(pin.id, ...grants);
+  const instance = kernel.types.get(name)(kernel.host(pin.id));
+  kernel.attach(pin.id, instance);
+  instance.mount(root, kernel.note(pin.note));
+  return { pin: pin.id, instance };
 }

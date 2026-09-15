@@ -1,19 +1,20 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Kernel } from '../src/kernel/kernel';
-import { mountDesk, stub } from './help';
+import { mountCanvas, plain } from './help';
 
 function setup(pins = 2) {
   const root = document.createElement('div');
   document.body.replaceChildren(root);
   const k = new Kernel();
-  k.types.define('stub', stub);
+  k.types.define('stub', plain);
+  k.types.define('box', plain);
   const desk = k.createNote('desk');
   const made = [];
   for (let i = 0; i < pins; i += 1) {
     made.push(k.pin(k.createNote(`n${i}`).id, desk.id, 'stub', { x: i * 300, y: 0, width: 240, height: 160 }));
   }
-  const { instance: view } = mountDesk(k, root, desk.id);
+  const { instance: view } = mountCanvas(k, root, desk.id);
   return { k, desk, root, view, pins: made };
 }
 
@@ -32,7 +33,7 @@ beforeEach(() => document.body.replaceChildren());
 describe('drag to move', () => {
   it('moves the pin and snaps to the grid', () => {
     const { k, root, pins } = setup();
-    const viewport = root.querySelector<HTMLElement>('.desk-viewport')!;
+    const viewport = root.querySelector<HTMLElement>('.canvas-viewport')!;
 
     down(grip(root), { clientX: 0, clientY: 0 });
     move(viewport, { clientX: 43, clientY: 27 });
@@ -44,7 +45,7 @@ describe('drag to move', () => {
 
   it('leaves geometry alone when the drag starts inside the Type', () => {
     const { k, root, pins } = setup();
-    const viewport = root.querySelector<HTMLElement>('.desk-viewport')!;
+    const viewport = root.querySelector<HTMLElement>('.canvas-viewport')!;
     const face = root.querySelector<HTMLElement>('.pin-face')!;
 
     down(face, { clientX: 0, clientY: 0 });
@@ -56,7 +57,7 @@ describe('drag to move', () => {
 
   it('resizes from the corner and refuses to go tiny', () => {
     const { k, root, pins } = setup();
-    const viewport = root.querySelector<HTMLElement>('.desk-viewport')!;
+    const viewport = root.querySelector<HTMLElement>('.canvas-viewport')!;
 
     down(handle(root), { clientX: 0, clientY: 0 });
     move(viewport, { clientX: 80, clientY: 40 });
@@ -71,7 +72,7 @@ describe('drag to move', () => {
 
   it('alt+drag makes a second pin of the same Note', () => {
     const { k, root, pins } = setup();
-    const viewport = root.querySelector<HTMLElement>('.desk-viewport')!;
+    const viewport = root.querySelector<HTMLElement>('.canvas-viewport')!;
     const note = k.getPin(pins[0]!.id).note;
 
     down(grip(root), { clientX: 0, clientY: 0, altKey: true });
@@ -86,15 +87,16 @@ describe('drag to move', () => {
 });
 
 describe('create and delete', () => {
-  it('double-clicking bare canvas makes a Note of the armed Type', () => {
+  it('double-clicking bare canvas makes an empty box', () => {
     const { k, root, desk } = setup();
-    const viewport = root.querySelector<HTMLElement>('.desk-viewport')!;
+    const viewport = root.querySelector<HTMLElement>('.canvas-viewport')!;
 
     viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 }));
 
     expect(k.childPins(desk.id)).toHaveLength(3);
     const made = k.getPin(k.focus()!);
-    expect(made.type).toBe('stub');
+    // Nothing to arm any more: a new box is a box.
+    expect(made.type).toBe('box');
     expect(k.body(made.note)).toBe('');
     expect(root.querySelectorAll('.pin')).toHaveLength(3);
   });
@@ -104,7 +106,7 @@ describe('create and delete', () => {
     root.querySelector<HTMLElement>('.pin')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     expect(k.focus()).toBe(pins[0]!.id);
 
-    const field = root.querySelector<HTMLTextAreaElement>('.stub-body')!;
+    const field = root.querySelector<HTMLTextAreaElement>('.plain')!;
     field.focus();
     key('Backspace');
     expect(k.childPins(desk.id)).toHaveLength(2);
@@ -131,7 +133,7 @@ describe('create and delete', () => {
 describe('undo', () => {
   it('puts a moved pin back where it was, in one step', () => {
     const { k, root, pins } = setup();
-    const viewport = root.querySelector<HTMLElement>('.desk-viewport')!;
+    const viewport = root.querySelector<HTMLElement>('.canvas-viewport')!;
 
     down(grip(root), { clientX: 0, clientY: 0 });
     for (const x of [10, 20, 30, 40, 56]) move(viewport, { clientX: x, clientY: 0 });
@@ -160,7 +162,7 @@ describe('undo', () => {
 
   it('undoes a created pin in one step, and typing as one edit', () => {
     const { k, root, desk } = setup();
-    const viewport = root.querySelector<HTMLElement>('.desk-viewport')!;
+    const viewport = root.querySelector<HTMLElement>('.canvas-viewport')!;
     viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, clientX: 400, clientY: 300 }));
     expect(k.childPins(desk.id)).toHaveLength(3);
 

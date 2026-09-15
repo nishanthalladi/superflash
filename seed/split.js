@@ -61,7 +61,7 @@ export default function (host) {
       const entry = mounted.get(pin.id);
       if (!entry) continue;
       const size = sizeOf(pin);
-      entry.box.style.flex = size > 0 ? `0 0 ${size}px` : '1 1 0';
+      entry.box.style.flex = size > 0 ? `0 0 ${size}px` : '1 1 0%';
     }
   }
 
@@ -87,7 +87,7 @@ export default function (host) {
     }
     const size = sizeOf(pin);
     // 0 means flexible: one pane usually takes whatever the fixed ones leave.
-    entry.box.style.flex = size > 0 ? `0 0 ${size}px` : '1 1 0';
+    entry.box.style.flex = size > 0 ? `0 0 ${size}px` : '1 1 0%';
     return entry.box;
   }
 

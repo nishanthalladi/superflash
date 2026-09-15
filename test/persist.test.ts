@@ -11,7 +11,7 @@ import {
   snapshots,
   writeDoc,
 } from '../src/kernel/persist';
-import { stub } from './help';
+import { plain as stub } from './help';
 
 function kernel() {
   const k = new Kernel();

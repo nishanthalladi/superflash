@@ -22,8 +22,8 @@ export type Change =
 
 /** The serialized document. Everything a reload needs; nothing about the view. */
 export interface Doc {
-  /** 2 dropped `chrome`: what is always on screen is a `split` Type now. */
-  version: 2;
+  /** 3 is the blank canvas: no `chrome`, no toolbar, one `box` Type. */
+  version: 3;
   root: NoteId;
   notes: Note[];
   pins: Pin[];
@@ -300,7 +300,7 @@ export class Kernel implements Undoable {
 
   toJSON(): Doc {
     return {
-      version: 2,
+      version: 3,
       root: this.root,
       notes: this.allNotes().map((n) => ({ ...n })),
       pins: this.allPins().map((p) => ({ ...p })),

@@ -1,24 +1,22 @@
 import type { Doc } from './kernel/kernel';
 import raw from '../seed/doc.json';
-import deskJs from '../seed/desk.js?raw';
-import stubJs from '../seed/stub.js?raw';
-import paletteJs from '../seed/palette.js?raw';
+import canvasJs from '../seed/canvas.js?raw';
 import treeJs from '../seed/tree.js?raw';
 import gitPanelJs from '../seed/git-panel.js?raw';
 import splitJs from '../seed/split.js?raw';
 
 /**
- * The seed document: the app as it ships. The Desk, the palette, the Stub — all
- * Notes. `src/` holds the kernel and the two Types you need to repair a broken
- * one; everything else is in here.
+ * The seed document: the app as it ships — a blank canvas with one box on it.
+ * The canvas itself is a Note, as are the tools that are not pinned anywhere yet
+ * (the tree, the git panel, the split layout: compiled, waiting to be pinned).
+ *
+ * `src/` holds the kernel and the two Types you need to repair a broken one.
  *
  * A Note body of exactly `@name.js` is a pointer to the file of that name. That
  * is the whole seed format, and it round-trips: see `eject.ts`.
  */
 export const FILES: Record<string, string> = {
-  'desk.js': deskJs,
-  'stub.js': stubJs,
-  'palette.js': paletteJs,
+  'canvas.js': canvasJs,
   'tree.js': treeJs,
   'git-panel.js': gitPanelJs,
   'split.js': splitJs,

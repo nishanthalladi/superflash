@@ -32,9 +32,9 @@ describe('eject', () => {
     const { kernel } = await stage0(host(), memoryStore(), { fs: null });
     const files = eject(kernel);
 
-    expect(Object.keys(files).sort()).toEqual(['desk.js', 'doc.json', 'git-panel.js', 'palette.js', 'split.js', 'stub.js', 'tree.js']);
-    expect(files['desk.js']).toContain("name: 'desk'");
-    expect(JSON.parse(files['doc.json']!).notes.map((n: { body: string }) => n.body)).toContain('@desk.js');
+    expect(Object.keys(files).sort()).toEqual(['canvas.js', 'doc.json', 'git-panel.js', 'split.js', 'tree.js']);
+    expect(files['canvas.js']).toContain("name: 'canvas'");
+    expect(JSON.parse(files['doc.json']!).notes.map((n: { body: string }) => n.body)).toContain('@canvas.js');
   });
 
   it('round-trips: eject, rebuild, boot fresh, same document', async () => {

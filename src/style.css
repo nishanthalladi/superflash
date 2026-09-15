@@ -30,35 +30,16 @@ body {
   flex-direction: column;
 }
 
-/* --- bar ----------------------------------------------------------------- */
-
-.desk-bar {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--edge);
-  font-size: 12px;
-}
-
-.desk-bar button {
-  background: transparent;
-  border: 1px solid var(--edge);
-  border-radius: 4px;
-  color: var(--ink);
-  font: inherit;
-  padding: 2px 8px;
-  cursor: pointer;
-}
-
-.desk-info {
-  margin-left: auto;
-  color: var(--dim);
-}
-
 /* --- canvas -------------------------------------------------------------- */
 
-.desk-viewport {
+.canvas {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.canvas-viewport {
   position: relative;
   flex: 1;
   overflow: hidden;
@@ -67,11 +48,7 @@ body {
   background-size: 24px 24px;
 }
 
-.desk-viewport.solo {
-  background-image: none;
-}
-
-.desk-layer {
+.canvas-layer {
   position: absolute;
   inset: 0;
   transform-origin: 0 0;
@@ -137,15 +114,15 @@ body {
   position: absolute;
   display: flex;
   flex-direction: column;
-  border: 1px solid hsl(var(--hue, 220) 30% 34%);
+  border: 1px solid #2f2f38;
   border-radius: 6px;
-  background: hsl(var(--hue, 220) 24% 13%);
+  background: #16161b;
   overflow: hidden;
 }
 
 .pin.focused {
-  outline: 2px solid hsl(var(--hue, 220) 70% 60%);
-  outline-offset: 1px;
+  border-color: #5a7bb8;
+  outline: 1px solid #5a7bb8;
 }
 
 .pin.broken {
@@ -161,18 +138,16 @@ body {
 
 .pin-grip {
   flex: none;
-  padding: 3px 6px;
-  border-bottom: 1px solid hsl(var(--hue, 220) 30% 24%);
-  background: hsl(var(--hue, 220) 26% 17%);
-  color: var(--dim);
-  font-size: 10px;
+  height: 12px;
+  border-bottom: 1px solid #2a2a30;
+  background: #1c1c22;
   cursor: grab;
   user-select: none;
 }
 
-.pin.full .pin-grip,
-.pin.full .pin-resize {
-  display: none;
+/* A box with boxes inside it says so, quietly. */
+.pin.deep .pin-grip {
+  background: repeating-linear-gradient(90deg, #1c1c22 0 6px, #2a2a34 6px 12px);
 }
 
 .pin-face {
@@ -180,9 +155,51 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px;
   overflow: hidden;
+}
+
+/* --- box: the only thing on a canvas ------------------------------------- */
+
+.box-text {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  border: 0;
+  padding: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.box-text:focus {
+  outline: none;
+}
+
+.box-text::placeholder {
+  color: #4a4a55;
+}
+
+.box-out {
+  flex: 0 0 auto;
+  max-height: 50%;
+  overflow: auto;
+  padding: 6px 8px;
+  border-top: 1px solid var(--edge);
+  color: #b9f0cf;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.box-out.bad {
+  color: var(--bad);
+}
+
+.box-out:empty {
+  display: none;
 }
 
 .pin-resize {
@@ -192,63 +209,7 @@ body {
   width: 14px;
   height: 14px;
   cursor: nwse-resize;
-  background: linear-gradient(135deg, transparent 50%, hsl(var(--hue, 220) 30% 40%) 50%);
-}
-
-/* --- stub ---------------------------------------------------------------- */
-
-.stub-head {
-  color: var(--dim);
-  font-size: 10px;
-}
-
-.stub-body {
-  flex: 1;
-  min-height: 0;
-  resize: none;
-  border: 0;
-  border-radius: 4px;
-  padding: 6px;
-  background: #00000040;
-  color: var(--ink);
-  font: inherit;
-  font-size: 12px;
-}
-
-.stub-body:focus {
-  outline: none;
-}
-
-.stub-tools {
-  display: flex;
-  gap: 4px;
-}
-
-.stub-tools button,
-.stub-target {
-  background: #00000040;
-  border: 1px solid var(--edge);
-  border-radius: 4px;
-  color: var(--ink);
-  font: inherit;
-  font-size: 10px;
-  padding: 2px 6px;
-  min-width: 0;
-  cursor: pointer;
-}
-
-.stub-target {
-  flex: 1;
-  cursor: text;
-}
-
-.stub-log {
-  margin: 0;
-  height: 3.4em;
-  overflow: hidden;
-  color: var(--dim);
-  font-size: 10px;
-  white-space: pre-wrap;
+  background: linear-gradient(135deg, transparent 50%, #33333d 50%);
 }
 
 /* --- code ---------------------------------------------------------------- */
@@ -300,126 +261,6 @@ body {
 
 .code-status.bad {
   color: var(--bad);
-}
-
-/* --- palette ------------------------------------------------------------- */
-
-.palette {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  height: 100%;
-  background: #16161b;
-  border-bottom: 1px solid var(--edge);
-}
-
-.palette-label {
-  color: var(--dim);
-  font-size: 10px;
-}
-
-.palette-list {
-  display: flex;
-  gap: 4px;
-  overflow: hidden;
-}
-
-.palette button {
-  background: #00000040;
-  border: 1px solid var(--edge);
-  border-radius: 4px;
-  color: var(--ink);
-  font: inherit;
-  font-size: 10px;
-  padding: 3px 8px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.palette button.armed {
-  border-color: #6f8fd0;
-  color: #cddcff;
-}
-
-/* Only the first of the "+ x" buttons pushes the group right. */
-.palette-list + .palette-new {
-  margin-left: auto;
-}
-
-/* --- desk shell ---------------------------------------------------------- */
-
-/* The Desk is a Type now — one pane among others. */
-.desk {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-/* --- cell ---------------------------------------------------------------- */
-
-.cell-source {
-  flex: 1;
-  min-height: 3em;
-  resize: none;
-  border: 0;
-  border-radius: 4px;
-  padding: 8px;
-  background: #00000055;
-  color: #d7e4ff;
-  font: inherit;
-  font-size: 11px;
-  line-height: 1.5;
-  tab-size: 2;
-}
-
-.cell-source:focus {
-  outline: none;
-}
-
-.cell-tools {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex: none;
-}
-
-.cell-tools button {
-  background: #23324a;
-  border: 1px solid #35507a;
-  border-radius: 4px;
-  color: var(--ink);
-  font: inherit;
-  font-size: 11px;
-  padding: 3px 10px;
-  cursor: pointer;
-}
-
-.cell-status {
-  color: var(--dim);
-  font-size: 10px;
-}
-
-.cell-out {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 6px 8px;
-  border-top: 1px solid var(--edge);
-  color: #b9f0cf;
-  font-size: 11px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-}
-
-.cell-out.bad {
-  color: var(--bad);
-}
-
-.cell-out:empty {
-  display: none;
 }
 
 /* --- safe shell ---------------------------------------------------------- */

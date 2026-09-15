@@ -1,55 +1,44 @@
-export const type = { name: 'desk', title: 'Desk' };
+export const type = { name: 'canvas', title: 'Canvas' };
 
 /**
- * The Desk, as a Note. Pan, zoom, click, focus, drag, nest. It owns the DOM and
- * nothing else — and it lives in the document, so you can edit it from a Cell
- * and watch it remount.
+ * A blank canvas of boxes. That is the whole thing.
  *
- * It holds `shell`, so it gets the kernel. Every geometry change still goes
- * through `kernel.move`, so undo and autosave see all of it.
+ * - double-click empty space → a new box, ready to type in
+ * - double-click a box → go inside it; every box is itself a canvas
+ * - Escape → come back out
+ * - drag the title bar to move, the corner to resize, Cmd+D for a second pin of
+ *   the same box, Backspace to remove one
+ *
+ * No toolbar, no breadcrumb, no armed Type. There is nothing to choose: a box is
+ * a box until what you put in it says otherwise.
+ *
+ * It holds `shell`, so it gets the kernel. Every geometry change goes through
+ * `kernel.move`, so undo and autosave see all of it.
  */
 
-const VIEW_KEY = 'desk:view:v1';
+const VIEW_KEY = 'desk:view:v2';
 const GRID = 8;
 const MIN = 64;
 const snap = (v) => Math.round(v / GRID) * GRID;
 
-const MODULE_TEMPLATE = `export const type = { name: 'my-type', title: 'My Type' };
-
-export default function (host) {
-  return {
-    mount(box, note) {
-      box.textContent = note.body || 'hello from a module';
-    },
-  };
-}
-`;
-
-const CELL_TEMPLATE = `// Shift+Enter to run. \`host\` is this pin's Host.
-export default (host) => host.pin.note;
-`;
-
 export default function (host) {
   const kernel = host.kernel();
   const stop = new AbortController();
-  const on = (el, name, fn, opts) =>
-    el.addEventListener(name, fn, { signal: stop.signal, ...(opts || {}) });
+  const on = (el, name, fn, opts) => el.addEventListener(name, fn, { signal: stop.signal, ...(opts || {}) });
 
   const boxes = new Map();
   const cams = new Map();
   const unwatch = [];
 
   let root;
-  const bar = document.createElement('div');
   const viewport = document.createElement('div');
   const layer = document.createElement('div');
 
   let current = host.pin.note;
   let trail = [current];
-  let armed = 'stub';
   let drag = null;
 
-  // --- view state ----------------------------------------------------------
+  // --- where you are -------------------------------------------------------
 
   function loadView() {
     let view = null;
@@ -66,10 +55,10 @@ export default function (host) {
   }
 
   function saveView() {
-    const cams_ = {};
-    for (const [k, v] of cams) cams_[k] = { ...v };
+    const saved = {};
+    for (const [k, v] of cams) saved[k] = { ...v };
     try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify({ at: current, trail: [...trail], cams: cams_ }));
+      localStorage.setItem(VIEW_KEY, JSON.stringify({ at: current, trail: [...trail], cams: saved }));
     } catch {
       // Private mode, quota — the camera is not worth an error.
     }
@@ -84,27 +73,22 @@ export default function (host) {
     return c;
   }
 
-  // --- geometry helpers ----------------------------------------------------
-
-  const solo = () => kernel.childPins(current).length === 1;
-
-  /** Screen point → canvas coordinates on the current Note. */
+  /** Screen point → canvas coordinates. */
   function at(e) {
     const rect = viewport.getBoundingClientRect();
     const c = cam();
     return { x: (e.clientX - rect.left - c.x) / c.z, y: (e.clientY - rect.top - c.y) / c.z };
   }
 
-  /** Canvas point at the centre of the viewport. */
   function middle() {
     const c = cam();
     const rect = viewport.getBoundingClientRect();
     return { x: (rect.width / 2 - c.x) / c.z, y: (rect.height / 2 - c.y) / c.z };
   }
 
-  // --- navigation ----------------------------------------------------------
+  // --- in and out ----------------------------------------------------------
 
-  function open(note) {
+  function enter(note) {
     if (note === current || !kernel.hasNote(note)) return;
     kernel.setFocus(null);
     for (const id of [...boxes.keys()]) drop(id);
@@ -116,35 +100,33 @@ export default function (host) {
     saveView();
   }
 
-  function back() {
+  function leave() {
     if (trail.length < 2) return;
     const parent = trail[trail.length - 2];
     trail.pop();
     trail.pop();
-    open(parent);
+    enter(parent);
   }
 
   // --- making things -------------------------------------------------------
 
-  /** Double-click on bare canvas: a new Note of the armed Type, centred there. */
-  function place(point, wanted = armed) {
-    const type_ = kernel.types.has(wanted) ? wanted : 'cell';
+  /** A new, empty box where you clicked. */
+  function place(point, type_ = 'box') {
     if (!kernel.types.has(type_)) return null;
-    const seed = type_ === 'cell' ? CELL_TEMPLATE : '';
     return kernel.journal.transact('place', () => {
-      const note = kernel.createNote(seed);
+      const note = kernel.createNote('');
       const pin = kernel.pin(note.id, current, type_, {
-        x: snap(point.x - 120),
-        y: snap(point.y - 80),
-        width: 240,
-        height: 160,
+        x: snap(point.x - 130),
+        y: snap(point.y - 60),
+        width: 260,
+        height: 120,
       });
       kernel.setFocus(pin.id);
       return pin.id;
     });
   }
 
-  /** Cmd+D: another pin of the same Note. One body, two places. */
+  /** Cmd+D: another pin of the same box. One body, two places. */
   function duplicate(pinId) {
     if (!kernel.hasPin(pinId)) return null;
     const pin = kernel.getPin(pinId);
@@ -160,11 +142,7 @@ export default function (host) {
     return copy.id;
   }
 
-  /**
-   * Show a Note that already exists. Used for files: the tree says which one, and
-   * the Desk decides where, because the Desk is what knows where you are looking.
-   * A second click focuses the pin you already have instead of making another.
-   */
+  /** Show a Note that already exists, or focus the pin that already shows it. */
   function reveal(noteId, type_, size) {
     if (!kernel.hasNote(noteId) || !kernel.types.has(type_)) return null;
     const already = kernel.childPins(current).find((p) => p.note === noteId);
@@ -185,40 +163,18 @@ export default function (host) {
     });
   }
 
-  /** A new Note of the given Type, seeded with a template, placed and focused. */
-  function newNote(type_, body, size) {
-    if (!kernel.types.has(type_)) return null;
-    const point = middle();
-    return kernel.journal.transact(`new-${type_}`, () => {
-      const note = kernel.createNote(body);
-      const pin = kernel.pin(note.id, current, type_, {
-        x: Math.round(point.x - size[0] / 2),
-        y: Math.round(point.y - size[1] / 2),
-        width: size[0],
-        height: size[1],
-      });
-      kernel.setFocus(pin.id);
-      return pin.id;
-    });
-  }
-
-  // --- render --------------------------------------------------------------
+  // --- drawing -------------------------------------------------------------
 
   function render() {
     const children = kernel.childPins(current);
     const alive = new Set(children.map((p) => p.id));
     for (const id of [...boxes.keys()]) if (!alive.has(id)) drop(id);
-    for (const pin of children) ensure(pin, layer);
+    for (const pin of children) ensure(pin);
     paint();
-    paintBar();
   }
 
-  function ensure(pin, parent) {
-    const existing = boxes.get(pin.id);
-    if (existing) {
-      if (existing.parentElement !== parent) parent.append(existing);
-      return;
-    }
+  function ensure(pin) {
+    if (boxes.has(pin.id)) return;
 
     const box = document.createElement('div');
     box.className = 'pin';
@@ -227,7 +183,6 @@ export default function (host) {
 
     const grip = document.createElement('div');
     grip.className = 'pin-grip';
-    grip.textContent = pin.type;
 
     const face = document.createElement('div');
     face.className = 'pin-face';
@@ -236,10 +191,10 @@ export default function (host) {
     handle.className = 'pin-resize';
 
     box.append(grip, face, handle);
-    parent.append(box);
+    layer.append(box);
     boxes.set(pin.id, box);
 
-    // A Type that throws must not take the Desk down with it.
+    // A Type that throws must not take the canvas down with it.
     try {
       const instance = kernel.types.get(pin.type)(kernel.host(pin.id));
       kernel.attach(pin.id, instance);
@@ -250,12 +205,6 @@ export default function (host) {
     }
   }
 
-  /** A Type was redefined: throw away its live instances and build them again. */
-  function remountType(name) {
-    for (const pin of kernel.pinsOfType(name)) if (boxes.has(pin.id)) drop(pin.id);
-    render();
-  }
-
   function drop(pinId) {
     kernel.detach(pinId);
     const box = boxes.get(pinId);
@@ -263,53 +212,28 @@ export default function (host) {
     boxes.delete(pinId);
   }
 
-  /** Cheap pass: geometry, camera, focus ring. No remounting. */
+  /** Geometry, camera, focus ring. No remounting. */
   function paint() {
-    const children = kernel.childPins(current);
-    const one = children.length === 1;
     const c = cam();
-    layer.style.transform = one ? 'none' : `translate(${c.x}px, ${c.y}px) scale(${c.z})`;
-    viewport.classList.toggle('solo', one);
-
+    layer.style.transform = `translate(${c.x}px, ${c.y}px) scale(${c.z})`;
     const focused = kernel.focus();
-    for (const pin of children) {
+    for (const pin of kernel.childPins(current)) {
       const box = boxes.get(pin.id);
       if (!box) continue;
-      const full = one && pin.parent === current;
-      if (full) {
-        box.style.inset = '0';
-        box.style.left = box.style.top = box.style.width = box.style.height = '';
-      } else {
-        box.style.inset = '';
-        box.style.left = `${pin.x}px`;
-        box.style.top = `${pin.y}px`;
-        box.style.width = `${pin.width}px`;
-        box.style.height = `${pin.height}px`;
-      }
-      box.classList.toggle('full', full);
+      box.style.left = `${pin.x}px`;
+      box.style.top = `${pin.y}px`;
+      box.style.width = `${pin.width}px`;
+      box.style.height = `${pin.height}px`;
+      // A box that holds other boxes says so, quietly.
+      box.classList.toggle('deep', kernel.childPins(pin.note).length > 0);
       box.classList.toggle('focused', pin.id === focused);
     }
   }
 
-  function paintBar() {
-    bar.replaceChildren();
-    trail.forEach((note, i) => {
-      const b = document.createElement('button');
-      b.textContent = i === 0 ? 'desk' : note.split('_')[1] || note;
-      b.onclick = () => open(note);
-      bar.append(b);
-    });
-
-    const info = document.createElement('span');
-    info.className = 'desk-info';
-    const count = kernel.childPins(current).length;
-    info.textContent = [
-      `${count} pin${count === 1 ? '' : 's'}`,
-      solo() ? 'full screen' : `${Math.round(cam().z * 100)}%`,
-      `armed: ${armed}`,
-      `undo ${kernel.journal.depth.past}`,
-    ].join(' · ');
-    bar.append(info);
+  /** A Type was redefined: rebuild the boxes drawn by it. */
+  function remountType(name) {
+    for (const pin of kernel.pinsOfType(name)) if (boxes.has(pin.id)) drop(pin.id);
+    render();
   }
 
   // --- pointer -------------------------------------------------------------
@@ -327,13 +251,12 @@ export default function (host) {
 
       const pinId = box.dataset.pin;
       kernel.setFocus(pinId);
-      if (solo()) return;
 
       const grip = e.target.closest('.pin-grip');
       const handle = e.target.closest('.pin-resize');
       if (!grip && !handle && !e.altKey) return;
 
-      // Alt+drag makes a second pin of the same Note and drags that instead.
+      // Alt+drag makes a second pin of the same box and drags that instead.
       let target = pinId;
       if (e.altKey && !handle) {
         const pin = kernel.getPin(pinId);
@@ -399,7 +322,6 @@ export default function (host) {
       viewport,
       'wheel',
       (e) => {
-        if (solo()) return;
         e.preventDefault();
         const c = cam();
         const rect = viewport.getBoundingClientRect();
@@ -419,7 +341,7 @@ export default function (host) {
     on(viewport, 'dblclick', (e) => {
       const box = e.target.closest ? e.target.closest('.pin') : null;
       e.preventDefault();
-      if (box) open(kernel.getPin(box.dataset.pin).note);
+      if (box) enter(kernel.getPin(box.dataset.pin).note);
       else place(at(e));
     });
   }
@@ -457,7 +379,7 @@ export default function (host) {
 
       if (e.key === 'Escape') {
         if (kernel.focus()) kernel.setFocus(null);
-        else back();
+        else leave();
         return;
       }
 
@@ -475,64 +397,29 @@ export default function (host) {
     });
   }
 
-  /**
-   * The toolbar and the tree are panes in the split above this one, not children
-   * of the Desk. They talk to it over the Spine, so they need no extra grants and
-   * the Desk needs no idea where they are.
-   */
-  function onFact(fact) {
-    const data = fact.data || {};
-    switch (fact.name) {
-      case 'arm':
-        if (typeof data.type === 'string' && kernel.types.has(data.type)) {
-          armed = data.type;
-          paintBar();
-        }
-        return;
-      case 'open':
-        if (typeof data.note === 'string') open(data.note);
-        return;
-      case 'new-module':
-        newNote('code', MODULE_TEMPLATE, [360, 280]);
-        return;
-      case 'new-cell':
-        newNote('cell', CELL_TEMPLATE, [420, 260]);
-        return;
-      case 'open-file':
-        if (typeof data.path === 'string') reveal(`file:${data.path}`, 'code', [640, 460]);
-        return;
-      case 'place':
-        if (typeof data.type === 'string') place(middle(), data.type);
-        return;
-      case 'defined':
-        if (typeof data.name === 'string') remountType(data.name);
-        return;
-      default:
-        return;
-    }
-  }
-
   return {
     mount(box) {
       root = box;
-      root.classList.add('desk');
+      root.classList.add('canvas');
       loadView();
 
-      bar.className = 'desk-bar';
-      viewport.className = 'desk-viewport';
-      layer.className = 'desk-layer';
+      viewport.className = 'canvas-viewport';
+      layer.className = 'canvas-layer';
       viewport.append(layer);
-      root.append(bar, viewport);
+      root.append(viewport);
 
       unwatch.push(
         kernel.watch((c) => {
           if (c.kind === 'pin:move' || c.kind === 'focus') paint();
           else render();
         }),
-        kernel.spine.subscribeAll(onFact),
-        kernel.types.watch(() => {
-          paintBar();
-          render();
+        kernel.spine.subscribeAll((fact) => {
+          const data = fact.data || {};
+          if (fact.name === 'open-file' && typeof data.path === 'string') {
+            reveal(`file:${data.path}`, 'code', [640, 460]);
+          } else if (fact.name === 'defined' && typeof data.name === 'string') {
+            remountType(data.name);
+          }
         }),
       );
 
@@ -549,14 +436,13 @@ export default function (host) {
       if (root) root.replaceChildren();
     },
 
-    // Read by tests and by Cells.
+    // Read by tests, and by anything in a box that wants to drive the canvas.
     get noteId() {
       return current;
     },
-    get armed() {
-      return armed;
-    },
-    open,
+    enter,
+    leave,
+    reveal,
     render,
   };
 }

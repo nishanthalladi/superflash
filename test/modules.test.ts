@@ -3,7 +3,7 @@ import { Kernel } from '../src/kernel/kernel';
 import { BadModule, loadSource } from '../src/kernel/modules';
 import type { Loader } from '../src/kernel/modules';
 import { DEFINE, Denied } from '../src/kernel/grants';
-import { stub } from './help';
+import { plain as stub } from './help';
 
 /** Compile with real ESM semantics via a data URL — no browser needed. */
 const real: Loader = loadSource;
