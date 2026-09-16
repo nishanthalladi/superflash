@@ -152,12 +152,17 @@ describe('a box is a canvas too', () => {
     const box = () => root.querySelector<HTMLElement>('.canvas-viewport > .canvas-layer > .pin')!;
 
     expect(box().querySelectorAll('.canvas-inside .pin')).toHaveLength(0);
+    const text = kernel.body(hello.note);
     kernel.pin(kernel.createNote('a thought').id, hello.note, 'canvas');
 
-    // The same component, drawn small: name, text and all.
+    // Text or boxes, never both: the note's text moved into a box of its own, so
+    // the box now holds two, and it shows them.
     const inside = box().querySelectorAll<HTMLElement>('.canvas-inside .pin');
-    expect(inside).toHaveLength(1);
-    expect(inside[0]!.querySelector<HTMLInputElement>('.canvas-name')!.value).toBe('a thought');
+    expect(inside).toHaveLength(2);
+    expect(kernel.body(hello.note)).toBe('Instructions');
+    expect(kernel.childPins(hello.note).map((p) => kernel.body(p.note))).toContain(
+      text.split('\n').slice(1).join('\n'),
+    );
   });
 });
 

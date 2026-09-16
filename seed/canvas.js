@@ -106,6 +106,23 @@ export default function (host) {
     kernel.patch(current, joinBody(body(), text.value));
   }
 
+  /**
+   * A box holds text, or boxes — never both. So the moment one gains a box, its
+   * text becomes the first box inside it. Nothing is lost and nothing needs a
+   * strip along the top: going inside a note only ever shows you boxes.
+   */
+  function spill() {
+    const tail = restOf(body());
+    if (!tail.trim()) return;
+    kernel.journal.transact('spill', () => {
+      // Empty this note *before* pinning the box that holds its text: the pin is
+      // what calls us, and a note with text still in it would call us again.
+      const note = kernel.createNote(tail);
+      kernel.patch(current, nameOf(body()));
+      kernel.pin(note.id, current, 'canvas', { x: GRID * 5, y: GRID * 5, width: 320, height: 180 });
+    });
+  }
+
   function drawName() {
     const name = nameOf(body());
     if (head && document.activeElement !== head) head.value = name;
@@ -278,6 +295,8 @@ export default function (host) {
     const alive = new Set(children.map((p) => p.id));
     for (const id of [...kids.keys()]) if (!alive.has(id)) drop(id);
     for (const pin of children) ensure(pin);
+    // Text or boxes, never both.
+    root.classList.toggle('holds', children.length > 0);
     paint();
   }
 
@@ -628,6 +647,8 @@ export default function (host) {
             drawName();
             drawText();
           }
+          // A box just gained a box: its text moves into one.
+          if (c.kind === 'pin:add' && kernel.hasPin(c.pin) && kernel.getPin(c.pin).parent === current) spill();
           if (c.kind === 'pin:move' || c.kind === 'focus') paint();
           else render();
         }),

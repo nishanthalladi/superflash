@@ -76,7 +76,12 @@ body {
 }
 
 /* No `:empty` here: a textarea whose value came from JS has no child nodes, so
-   `:empty` is always true and the text disappeared. */
+   `:empty` is always true and the text disappeared. A box that holds boxes has no
+   text left to show — it was moved into the first one. */
+.canvas.holds > .canvas-text,
+.canvas-nest.holds > .canvas-text {
+  display: none;
+}
 
 .canvas-viewport {
   position: relative;
