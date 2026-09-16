@@ -66,16 +66,17 @@ body {
 /* The outermost canvas shows its own text too — same parts, more room. */
 .canvas > .canvas-text {
   flex: 0 1 auto;
-  max-height: 30%;
+  height: 8.5em;
+  max-height: 34%;
+  overflow: auto;
   padding: 10px 16px;
   border-bottom: 1px solid var(--edge);
   background: #131317;
   font-size: 13px;
 }
 
-.canvas > .canvas-text:empty {
-  display: none;
-}
+/* No `:empty` here: a textarea whose value came from JS has no child nodes, so
+   `:empty` is always true and the text disappeared. */
 
 .canvas-viewport {
   position: relative;
