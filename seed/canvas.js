@@ -535,6 +535,16 @@ export default function (host) {
         return;
       }
 
+      // Cmd+N: a box, wherever you are. On a note that is still only text, this
+      // is the way to start putting boxes on it.
+      if (mod && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        const rect = viewport.getBoundingClientRect();
+        const c = cam();
+        place({ x: (rect.width / 2 - c.x) / c.z || 300, y: (rect.height / 2 - c.y) / c.z || 200 });
+        return;
+      }
+
       if (mod && e.key.toLowerCase() === 'd') {
         const pin = kernel.focus();
         if (pin) {

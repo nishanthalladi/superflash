@@ -64,14 +64,18 @@ body {
 }
 
 /* The outermost canvas shows its own text too — same parts, more room. */
-.canvas > .canvas-text {
-  flex: 0 1 auto;
-  height: 8.5em;
-  max-height: 34%;
+/* A note with no boxes in it *is* its text: full screen, not a strip. Cmd+N puts
+   the first box on it, which moves the text into a box of its own. */
+.canvas:not(.holds) > .canvas-viewport {
+  display: none;
+}
+
+.canvas:not(.holds) > .canvas-text {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--edge);
-  background: #131317;
+  padding: 12px 16px;
+  background: var(--bg);
   font-size: 13px;
 }
 

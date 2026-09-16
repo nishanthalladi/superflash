@@ -7,7 +7,7 @@
   "notes": [
     { "id": "note_1_root", "body": "root" },
     { "id": "note_2_canvas", "body": "Superflash" },
-    { "id": "note_3_hello", "body": "Instructions\nDouble-click empty space for a box.\nDouble-click a box's title bar to go inside it — the text stays, at the top.\nEscape comes back out.\n\nThe first line of a box is its name.\nShift+Enter runs a box." },
+    { "id": "note_3_hello", "body": "Instructions\nDouble-click empty space for a box.\nDouble-click a box's title bar to go inside it. Drag the dotted handle to move it.\nEscape comes back out.\n\nThe first line of a box is its name.\nCmd+N puts a box on a note that is still only text.\nShift+Enter runs a box." },
     { "id": "note_10_canvas", "body": "@canvas.js" },
     { "id": "note_11_tree", "body": "@tree.js" },
     { "id": "note_12_git", "body": "@git-panel.js" },
