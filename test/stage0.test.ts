@@ -68,16 +68,14 @@ describe('a box is a canvas too', () => {
     const hello = kernel.childPins(outer)[0]!;
     const instance = kernel.instance(shell!) as unknown as { noteId: string };
 
-    // The title bar is the way in; the text and the name field are for editing.
-    for (const sel of ['.pin .pin-face', '.pin .pin-grip']) {
-      root.querySelector<HTMLElement>(sel)!.dispatchEvent(
-        new MouseEvent('dblclick', { bubbles: true, cancelable: true }),
-      );
-      expect(instance.noteId).toBe(outer);
-    }
+    // The text is for editing; the whole title bar is the way in.
+    root
+      .querySelector<HTMLElement>('.pin .pin-face')!
+      .dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+    expect(instance.noteId).toBe(outer);
 
     root
-      .querySelector<HTMLElement>('.pin .pin-drag')!
+      .querySelector<HTMLElement>('.pin .pin-grip')!
       .dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
     expect(instance.noteId).toBe(hello.note);
     expect(root.querySelectorAll('.canvas-layer > .pin')).toHaveLength(0);

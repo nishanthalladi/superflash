@@ -406,9 +406,9 @@ export default function (host) {
     on(viewport, 'dblclick', (e) => {
       const box = e.target.closest ? e.target.closest('.pin') : null;
       if (box) {
-        // The bar is the way in — but not the name field on it, where a
-        // double-click selects a word, as it should.
-        if (e.target.closest('.pin-bar') && !e.target.closest('.pin-grip')) {
+        // The whole bar is the way in, name field included — a 22px pad was too
+        // small a target to find. Word-select in the name is worth less than this.
+        if (e.target.closest('.pin-bar')) {
           e.preventDefault();
           enter(kernel.getPin(box.dataset.pin).note);
         }

@@ -42,15 +42,15 @@ body {
 /* The name of the note you are inside: the first line of its body, centred. */
 .canvas-head {
   flex: 0 0 auto;
-  height: 38px;
-  line-height: 38px;
+  height: 52px;
+  line-height: 52px;
   border: 0;
   border-bottom: 1px solid var(--edge);
   padding: 0 16px;
   background: #131317;
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 20px;
   text-align: center;
 }
 
