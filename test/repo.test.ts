@@ -182,7 +182,7 @@ describe('git is a capability, not a Type', () => {
 describe('the fs grant', () => {
   it('is held by a box, and denied to a Type the policy does not name', async () => {
     const booted = await stage0(host(), memoryStore(), { fs: fakeFs(REPO).fs });
-    const box = booted.kernel.allPins().find((p) => p.type === 'box')!;
+    const box = booted.kernel.allPins().find((p) => p.type === 'canvas')!;
     expect(booted.kernel.grants.has(box.id, FS)).toBe(true);
 
     booted.kernel.types.define('nosy', () => ({ mount() {} }));

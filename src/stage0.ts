@@ -4,7 +4,6 @@ import type { Grant } from './kernel/grants';
 import type { Pin, PinId } from './kernel/model';
 import { autosave, readDoc, snapshot } from './kernel/persist';
 import type { Store } from './kernel/persist';
-import { box } from './types/box';
 import { code } from './types/code';
 import type { FsClient } from './kernel/type';
 import { httpFs, reachable, sync } from './files';
@@ -20,8 +19,9 @@ import { safeShell } from './safe';
  * gets nothing beyond read/write self and emit.
  */
 export const POLICY: Record<string, Grant[]> = {
-  canvas: [SHELL, CREATE, TYPES],
-  box: [SHELL, FS, DEFINE, CREATE, TYPES, MACHINE],
+  // One Type does everything a canvas does, at every depth — so it holds
+  // everything a canvas needs, including running what you type in it.
+  canvas: [SHELL, FS, DEFINE, CREATE, TYPES, MACHINE],
   split: [SHELL],
   code: [DEFINE],
   tree: [FS],
@@ -33,9 +33,8 @@ export function applyPolicy(kernel: Kernel, pin: Pin): void {
   if (grants) kernel.grants.give(pin.id, ...grants);
 }
 
-/** The only Types in `src/`: a box and a file editor. Enough to repair anything. */
+/** The only Type in `src/`: a file editor. Enough to repair a broken canvas. */
 export function registerBuiltins(kernel: Kernel): void {
-  kernel.types.define('box', box, { title: 'Box' });
   kernel.types.define('code', code, { title: 'Code' });
 }
 

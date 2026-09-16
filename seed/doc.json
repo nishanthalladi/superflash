@@ -15,6 +15,6 @@
   ],
   "pins": [
     { "id": "pin_1_root", "note": "note_2_canvas", "parent": "note_1_root", "type": "canvas", "x": 0, "y": 0, "width": 0, "height": 0 },
-    { "id": "pin_2_hello", "note": "note_3_hello", "parent": "note_2_canvas", "type": "box", "x": 96, "y": 96, "width": 380, "height": 160 }
+    { "id": "pin_2_hello", "note": "note_3_hello", "parent": "note_2_canvas", "type": "canvas", "x": 96, "y": 96, "width": 380, "height": 160 }
   ]
 }

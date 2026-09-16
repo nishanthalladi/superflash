@@ -1,25 +1,25 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Kernel } from '../src/kernel/kernel';
-import { mountCanvas, plain } from './help';
+import { canvas, mountCanvas } from './help';
 
 function setup(pins = 2) {
   const root = document.createElement('div');
   document.body.replaceChildren(root);
   const k = new Kernel();
-  k.types.define('stub', plain);
-  k.types.define('box', plain);
+  // Children are canvases too — there is only one Type.
+  k.types.define('canvas', canvas);
   const desk = k.createNote('desk');
   const made = [];
   for (let i = 0; i < pins; i += 1) {
-    made.push(k.pin(k.createNote(`n${i}`).id, desk.id, 'stub', { x: i * 300, y: 0, width: 240, height: 160 }));
+    made.push(k.pin(k.createNote(`n${i}`).id, desk.id, 'canvas', { x: i * 300, y: 0, width: 240, height: 160 }));
   }
   const { instance: view } = mountCanvas(k, root, desk.id);
   return { k, desk, root, view, pins: made };
 }
 
-/** The drag pad on the title bar. The name field beside it only takes a caret. */
-const grip = (root: HTMLElement, i = 0) => [...root.querySelectorAll<HTMLElement>('.pin-drag')][i]!;
+/** The title bar: drag from it, or double-click it to go inside. */
+const grip = (root: HTMLElement, i = 0) => [...root.querySelectorAll<HTMLElement>('.canvas-bar')][i]!;
 const handle = (root: HTMLElement, i = 0) => [...root.querySelectorAll<HTMLElement>('.pin-resize')][i]!;
 const down = (el: HTMLElement, o: MouseEventInit = {}) =>
   el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, ...o }));
@@ -97,17 +97,17 @@ describe('create and delete', () => {
     expect(k.childPins(desk.id)).toHaveLength(3);
     const made = k.getPin(k.focus()!);
     // Nothing to arm any more: a new box is a box.
-    expect(made.type).toBe('box');
+    expect(made.type).toBe('canvas');
     expect(k.body(made.note)).toBe('');
-    expect(root.querySelectorAll('.pin')).toHaveLength(3);
+    expect(root.querySelectorAll('.canvas-viewport > .canvas-layer > .pin')).toHaveLength(3);
   });
 
   it('Backspace unpins the focused pin, but not while typing', () => {
     const { k, root, pins, desk } = setup();
-    root.querySelector<HTMLElement>('.pin')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    root.querySelector<HTMLElement>('.canvas-viewport > .canvas-layer > .pin')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     expect(k.focus()).toBe(pins[0]!.id);
 
-    const field = root.querySelector<HTMLTextAreaElement>('.plain')!;
+    const field = root.querySelector<HTMLTextAreaElement>('.canvas-text')!;
     field.focus();
     key('Backspace');
     expect(k.childPins(desk.id)).toHaveLength(2);
@@ -120,7 +120,7 @@ describe('create and delete', () => {
 
   it('Cmd+D duplicates the pin, not the Note', () => {
     const { k, root, pins } = setup();
-    root.querySelector<HTMLElement>('.pin')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    root.querySelector<HTMLElement>('.canvas-viewport > .canvas-layer > .pin')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
 
     key('d', { metaKey: true });
 
@@ -150,7 +150,7 @@ describe('undo', () => {
 
   it('restores a deleted pin with its id', () => {
     const { k, root, pins, desk } = setup();
-    root.querySelector<HTMLElement>('.pin')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    root.querySelector<HTMLElement>('.canvas-viewport > .canvas-layer > .pin')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     (document.activeElement as HTMLElement | null)?.blur();
     key('Backspace');
     expect(k.hasPin(pins[0]!.id)).toBe(false);
@@ -158,7 +158,7 @@ describe('undo', () => {
     key('z', { metaKey: true });
     expect(k.hasPin(pins[0]!.id)).toBe(true);
     expect(k.childPins(desk.id)).toHaveLength(2);
-    expect(root.querySelectorAll('.pin')).toHaveLength(2);
+    expect(root.querySelectorAll('.canvas-viewport > .canvas-layer > .pin')).toHaveLength(2);
   });
 
   it('undoes a created pin in one step, and typing as one edit', () => {

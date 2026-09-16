@@ -100,8 +100,8 @@ export async function until(what: () => boolean, tries = 100): Promise<void> {
 
 /** Run a box (Shift+Enter) and wait for it to settle. Returns the output text. */
 export async function runBox(el: ParentNode): Promise<string> {
-  const text = el.querySelector<HTMLTextAreaElement>('.box-text')!;
-  const out = el.querySelector<HTMLElement>('.box-out')!;
+  const text = el.querySelector<HTMLTextAreaElement>('.canvas-text')!;
+  const out = el.querySelector<HTMLElement>('.canvas-out')!;
   text.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true }));
   await until(() => out.textContent !== '…');
   return out.textContent ?? '';
@@ -124,10 +124,16 @@ export function mountCanvas(kernel: Kernel, root: HTMLElement, note: NoteId): Mo
     // no store, no camera
   }
   if (!kernel.types.has('canvas')) kernel.types.define('canvas', canvas, { title: 'Canvas' });
+  // Every canvas gets the same powers, at every depth — as the policy does.
+  const powers = (id: PinId): void => kernel.grants.give(id, SHELL, CREATE, TYPES);
+  for (const p of kernel.allPins()) if (p.type === 'canvas') powers(p.id);
+  kernel.watch((c) => {
+    if (c.kind === 'pin:add' && kernel.hasPin(c.pin) && kernel.getPin(c.pin).type === 'canvas') powers(c.pin);
+  });
   const shell = kernel.createNote('root');
   kernel.root = shell.id;
   const pin = kernel.pin(note, shell.id, 'canvas');
-  kernel.grants.give(pin.id, SHELL, CREATE, TYPES);
+  powers(pin.id);
   const instance = kernel.types.get('canvas')(kernel.host(pin.id)) as Mounted['instance'];
   kernel.attach(pin.id, instance);
   instance.mount(root, kernel.note(note));

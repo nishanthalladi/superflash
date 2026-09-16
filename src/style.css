@@ -160,48 +160,6 @@ body {
   white-space: pre-wrap;
 }
 
-/* The title bar: the note's name, and the only place you drag or enter from. */
-.pin-bar {
-  flex: none;
-  display: flex;
-  align-items: stretch;
-  height: 32px;
-  border-bottom: 1px solid #2a2a30;
-  background: #1c1c22;
-}
-
-.pin-grip {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  padding: 0 9px;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: 16px;
-}
-
-.pin-grip:focus {
-  outline: none;
-}
-
-.pin-grip::placeholder {
-  color: #45454f;
-}
-
-.pin-drag {
-  flex: 0 0 22px;
-  cursor: grab;
-  user-select: none;
-  background: radial-gradient(circle, #3a3a44 1px, transparent 1.2px);
-  background-size: 5px 5px;
-}
-
-/* A box with boxes inside it says so, quietly. */
-.pin.deep .pin-bar {
-  background: repeating-linear-gradient(90deg, #1c1c22 0 6px, #24242c 6px 12px);
-}
-
 .pin-face {
   flex: 1;
   min-height: 0;
@@ -210,14 +168,52 @@ body {
   overflow: hidden;
 }
 
-/* --- box: the only thing on a canvas ------------------------------------- */
+/* --- a canvas inside a canvas: the same three parts, smaller ------------- */
 
-.box-text {
+.canvas-nest {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* The title bar: the note's name, and the way you drag it or go inside. */
+.canvas-bar {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  height: 30px;
+  border-bottom: 1px solid #2a2a30;
+  background: #1c1c22;
+  cursor: grab;
+}
+
+.canvas-name {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+
+.canvas-name:focus {
+  outline: none;
+}
+
+.canvas-name::placeholder {
+  color: #45454f;
+}
+
+.canvas-text {
+  flex: 0 1 auto;
+  min-height: 1.6em;
   resize: none;
   border: 0;
-  padding: 8px;
+  padding: 7px 9px;
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -226,19 +222,34 @@ body {
   tab-size: 2;
 }
 
-.box-text:focus {
+.canvas-text:focus {
   outline: none;
 }
 
-.box-text::placeholder {
+.canvas-text::placeholder {
   color: #4a4a55;
 }
 
-.box-out {
+/* What this canvas holds, drawn to scale — the picture of what is inside. */
+.canvas-inside {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  /* A preview, not a control: you reach these by going inside. */
+  pointer-events: none;
+}
+
+.canvas-inside:empty,
+.canvas-inside > .canvas-layer:empty {
+  display: none;
+}
+
+.canvas-out {
   flex: 0 0 auto;
   max-height: 50%;
   overflow: auto;
-  padding: 6px 8px;
+  padding: 6px 9px;
   border-top: 1px solid var(--edge);
   color: #b9f0cf;
   font-size: 11px;
@@ -246,11 +257,11 @@ body {
   white-space: pre-wrap;
 }
 
-.box-out.bad {
+.canvas-out.bad {
   color: var(--bad);
 }
 
-.box-out:empty {
+.canvas-out:empty {
   display: none;
 }
 

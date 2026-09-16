@@ -1,48 +1,154 @@
 export const type = { name: 'canvas', title: 'Canvas' };
 
 /**
- * A blank canvas of boxes. That is the whole thing.
+ * A canvas. There is only one Type, and this is it — a box *is* a canvas, drawn
+ * small. Every one of them has the same three parts:
  *
- * - double-click empty space → a new box, ready to type in
- * - double-click a box's title bar → go inside it; every box is itself a canvas.
- *   Inside, that note's own text is still there, full width at the top, and its
- *   boxes are on the canvas below. Going in is a zoom, not a change of subject.
- * - Escape → come back out
- * - drag the title bar to move, the corner to resize, Cmd+D for a second pin of
- *   the same box, Backspace to remove one
+ *   name   the first line of the body, on the title bar
+ *   text   everything after that line, editable
+ *   inside its own child canvases, laid out where they were put
  *
- * No toolbar, no breadcrumb, no armed Type. There is nothing to choose: a box is
- * a box until what you put in it says otherwise.
+ * So a note on the screen shows what it would show if you went inside it, and
+ * going inside is only a zoom: the same component, bigger.
  *
- * It holds `shell`, so it gets the kernel. Every geometry change goes through
- * `kernel.move`, so undo and autosave see all of it.
+ * - double-click empty space → a new canvas, ready to be named
+ * - double-click a title bar → go inside that one
+ * - Escape → out of the text, out of the selection, out of the note
+ * - drag a title bar to move, the corner to resize, Cmd+D for a second pin of the
+ *   same note, Backspace (or Cmd+Backspace while typing) to remove one
+ * - Shift+Enter runs the body as a module and shows what came out
+ *
+ * The outermost instance holds the camera and the keyboard; the ones inside it
+ * are the same code with `depth > 0`, which only changes how much they draw.
+ *
+ * ponytail: nested canvases stop drawing children at DEEP levels down. Raise it
+ * when a real desk needs to see further.
  */
 
 const VIEW_KEY = 'superflash:view:v2';
 const NAME = 'Superflash';
 const GRID = 8;
 const MIN = 64;
+const DEEP = 2;
 const snap = (v) => Math.round(v / GRID) * GRID;
+
+/** How deep each pin sits. Set by the canvas that mounts it. */
+const DEPTH = new Map();
+
+/** The first line of a body is its name. Nothing else names anything. */
+function nameOf(body) {
+  const line = body.split('\n').find((l) => l.trim()) || '';
+  return line.trim();
+}
+
+/** Everything after the name line. */
+function restOf(body) {
+  const lines = body.split('\n');
+  const at = lines.findIndex((l) => l.trim());
+  return at < 0 ? '' : lines.slice(at + 1).join('\n');
+}
+
+/** Put the name back on the front of what the text area shows. */
+function joinBody(body, tail) {
+  const lines = body.split('\n');
+  const at = lines.findIndex((l) => l.trim());
+  const head = at < 0 ? '' : lines.slice(0, at + 1).join('\n');
+  if (head === '') return tail;
+  // No trailing newline for an empty text: a write that changes nothing is still
+  // a write, and it would land in the undo history.
+  return tail === '' ? head : `${head}\n${tail}`;
+}
+
+/** Real ESM from a string, so a canvas can be run. No eval. */
+async function load(source) {
+  const url = `data:text/javascript;base64,${btoa(unescape(encodeURIComponent(source)))}`;
+  return import(/* @vite-ignore */ url);
+}
 
 export default function (host) {
   const kernel = host.kernel();
+  const depth = DEPTH.get(host.pin.id) || 0;
+  const outer = depth === 0;
+
   const stop = new AbortController();
   const on = (el, name, fn, opts) => el.addEventListener(name, fn, { signal: stop.signal, ...(opts || {}) });
 
-  const boxes = new Map();
+  /** pinId → { box, face } for every child this canvas has mounted. */
+  const kids = new Map();
   const cams = new Map();
   const unwatch = [];
 
   let root;
-  const head = document.createElement('input');
-  const viewport = document.createElement('div');
-  const layer = document.createElement('div');
+  let head;
+  let bar;
+  let text;
+  let out;
+  let viewport;
+  let layer;
 
   let current = host.pin.note;
   let trail = [current];
   let drag = null;
 
-  // --- where you are -------------------------------------------------------
+  // --- the note this canvas is showing --------------------------------------
+
+  const body = () => (kernel.hasNote(current) ? kernel.body(current) : '');
+
+  function rename(noteId, name) {
+    const lines = kernel.body(noteId).split('\n');
+    const at = lines.findIndex((l) => l.trim());
+    if (at < 0) lines.splice(0, lines.length, name);
+    else lines[at] = name;
+    kernel.patch(noteId, lines.join('\n'));
+  }
+
+  function writeText() {
+    kernel.patch(current, joinBody(body(), text.value));
+  }
+
+  function drawName() {
+    const name = nameOf(body());
+    if (head && document.activeElement !== head) head.value = name;
+    if (outer) document.title = name || NAME;
+  }
+
+  function drawText() {
+    if (!text || document.activeElement === text) return;
+    const tail = restOf(body());
+    if (text.value === tail) return;
+    text.value = tail;
+  }
+
+  // --- running --------------------------------------------------------------
+
+  function show(value, bad = false) {
+    out.replaceChildren();
+    out.classList.toggle('bad', bad);
+    if (value === undefined) return void (out.textContent = '');
+    if (value instanceof Node) return void out.append(value);
+    if (value instanceof Error) return void (out.textContent = `${value.name}: ${value.message}`);
+    try {
+      out.textContent = JSON.stringify(value, null, 2) ?? String(value);
+    } catch {
+      out.textContent = String(value);
+    }
+  }
+
+  async function run() {
+    writeText();
+    out.textContent = '…';
+    out.classList.remove('bad');
+    try {
+      const mod = await load(body());
+      const value =
+        typeof mod.default === 'function' ? await mod.default(host) : 'out' in mod ? mod.out : mod.default;
+      show(await value);
+    } catch (err) {
+      show(err instanceof Error ? err : new Error(String(err)), true);
+    }
+  }
+
+  // --- where you are (outermost only) --------------------------------------
 
   function loadView() {
     let view = null;
@@ -77,30 +183,21 @@ export default function (host) {
     return c;
   }
 
-  /** Screen point → canvas coordinates. */
   function at(e) {
     const rect = viewport.getBoundingClientRect();
     const c = cam();
     return { x: (e.clientX - rect.left - c.x) / c.z, y: (e.clientY - rect.top - c.y) / c.z };
   }
 
-  function middle() {
-    const c = cam();
-    const rect = viewport.getBoundingClientRect();
-    return { x: (rect.width / 2 - c.x) / c.z, y: (rect.height / 2 - c.y) / c.z };
-  }
-
-  // --- in and out ----------------------------------------------------------
-
   function enter(note) {
-    if (note === current || !kernel.hasNote(note)) return;
+    if (!outer || note === current || !kernel.hasNote(note)) return;
     kernel.setFocus(null);
-    for (const id of [...boxes.keys()]) drop(id);
+    for (const id of [...kids.keys()]) drop(id);
     current = note;
     const i = trail.indexOf(note);
     if (i >= 0) trail.length = i + 1;
     else trail.push(note);
-    drawHead();
+    drawName();
     render();
     saveView();
   }
@@ -115,27 +212,23 @@ export default function (host) {
 
   // --- making things -------------------------------------------------------
 
-  /** A new, empty box where you clicked, ready to be named. */
-  function place(point, type_ = 'box') {
-    if (!kernel.types.has(type_)) return null;
+  function place(point) {
     const id = kernel.journal.transact('place', () => {
       const note = kernel.createNote('');
-      const pin = kernel.pin(note.id, current, type_, {
+      const pin = kernel.pin(note.id, current, 'canvas', {
         x: snap(point.x - 130),
-        y: snap(point.y - 60),
+        y: snap(point.y - 70),
         width: 260,
-        height: 120,
+        height: 140,
       });
       kernel.setFocus(pin.id);
       return pin.id;
     });
-    // The name comes first, so that is where the caret goes.
-    const grip = boxes.get(id) && boxes.get(id).querySelector('.pin-grip');
-    if (grip) grip.focus();
+    const entry = kids.get(id);
+    if (entry) entry.box.querySelector('.canvas-name').focus();
     return id;
   }
 
-  /** Cmd+D: another pin of the same box. One body, two places. */
   function duplicate(pinId) {
     if (!kernel.hasPin(pinId)) return null;
     const pin = kernel.getPin(pinId);
@@ -151,7 +244,7 @@ export default function (host) {
     return copy.id;
   }
 
-  /** Show a Note that already exists, or focus the pin that already shows it. */
+  /** Show a note that already exists, or focus the pin that already shows it. */
   function reveal(noteId, type_, size) {
     if (!kernel.hasNote(noteId) || !kernel.types.has(type_)) return null;
     const already = kernel.childPins(current).find((p) => p.note === noteId);
@@ -159,7 +252,9 @@ export default function (host) {
       kernel.setFocus(already.id);
       return already.id;
     }
-    const point = middle();
+    const rect = viewport.getBoundingClientRect();
+    const c = cam();
+    const point = { x: (rect.width / 2 - c.x) / c.z, y: (rect.height / 2 - c.y) / c.z };
     return kernel.journal.transact('reveal', () => {
       const pin = kernel.pin(noteId, current, type_, {
         x: snap(point.x - size[0] / 2),
@@ -172,74 +267,23 @@ export default function (host) {
     });
   }
 
-  /** The first line of a note's body is its name. Nothing else names anything. */
-  function title(noteId) {
-    const body = kernel.hasNote(noteId) ? kernel.body(noteId) : '';
-    const line = body.split('\n').find((l) => l.trim()) || '';
-    return line.trim().slice(0, 60);
-  }
-
-  /**
-   * The name of the note you are inside, big and centred. It is the first line of
-   * the body, not a separate field — editing it rewrites that line and leaves the
-   * rest of the text alone.
-   */
-  function drawHead() {
-    if (document.activeElement !== head) head.value = title(current);
-    document.title = title(current) || NAME;
-  }
-
-  /** Rewrite a note's name line and leave the rest of its text alone. */
-  function rename(noteId, name) {
-    const lines = kernel.body(noteId).split('\n');
-    const at = lines.findIndex((l) => l.trim());
-    if (at < 0) lines.splice(0, lines.length, name);
-    else lines[at] = name;
-    kernel.patch(noteId, lines.join('\n'));
-  }
-
-  // --- drawing -------------------------------------------------------------
+  // --- children ------------------------------------------------------------
 
   function render() {
     const children = kernel.childPins(current);
     const alive = new Set(children.map((p) => p.id));
-    for (const id of [...boxes.keys()]) if (!alive.has(id)) drop(id);
+    for (const id of [...kids.keys()]) if (!alive.has(id)) drop(id);
     for (const pin of children) ensure(pin);
     paint();
   }
 
   function ensure(pin) {
-    if (boxes.has(pin.id)) return;
+    if (kids.has(pin.id)) return;
 
     const box = document.createElement('div');
     box.className = 'pin';
     box.dataset.pin = pin.id;
     box.dataset.type = pin.type;
-
-    // The title bar *is* the name: an input on the note's first line. So the name
-    // is never on screen twice, and typing it never makes text jump.
-    const bar = document.createElement('div');
-    bar.className = 'pin-bar';
-
-    const grip = document.createElement('input');
-    grip.className = 'pin-grip';
-    grip.spellcheck = false;
-    grip.placeholder = 'name';
-    grip.value = title(pin.note);
-    on(grip, 'input', () => rename(pin.note, grip.value));
-    on(grip, 'keydown', (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      const inside = box.querySelector('.pin-face textarea, .pin-face input');
-      if (inside) inside.focus();
-    });
-
-    // Drag and enter live here, so a click on the name only ever places a caret.
-    const drag = document.createElement('div');
-    drag.className = 'pin-drag';
-    drag.title = 'drag to move, double-click to go inside';
-
-    bar.append(grip, drag);
 
     const face = document.createElement('div');
     face.className = 'pin-face';
@@ -247,12 +291,13 @@ export default function (host) {
     const handle = document.createElement('div');
     handle.className = 'pin-resize';
 
-    box.append(bar, face, handle);
+    box.append(face, handle);
     layer.append(box);
-    boxes.set(pin.id, box);
+    kids.set(pin.id, { box, face });
 
     // A Type that throws must not take the canvas down with it.
     try {
+      DEPTH.set(pin.id, depth + 1);
       const instance = kernel.types.get(pin.type)(kernel.host(pin.id));
       kernel.attach(pin.id, instance);
       instance.mount(face, kernel.note(pin.note));
@@ -264,38 +309,58 @@ export default function (host) {
 
   function drop(pinId) {
     kernel.detach(pinId);
-    const box = boxes.get(pinId);
-    if (box) box.remove();
-    boxes.delete(pinId);
+    DEPTH.delete(pinId);
+    const entry = kids.get(pinId);
+    if (entry) entry.box.remove();
+    kids.delete(pinId);
   }
 
   /** Geometry, camera, focus ring. No remounting. */
   function paint() {
-    const c = cam();
-    layer.style.transform = `translate(${c.x}px, ${c.y}px) scale(${c.z})`;
+    if (!layer) return;
+    if (outer) {
+      const c = cam();
+      layer.style.transform = `translate(${c.x}px, ${c.y}px) scale(${c.z})`;
+    }
     const focused = kernel.focus();
     for (const pin of kernel.childPins(current)) {
-      const box = boxes.get(pin.id);
-      if (!box) continue;
+      const entry = kids.get(pin.id);
+      if (!entry) continue;
+      const box = entry.box;
       box.style.left = `${pin.x}px`;
       box.style.top = `${pin.y}px`;
       box.style.width = `${pin.width}px`;
       box.style.height = `${pin.height}px`;
-      const grip = box.querySelector('.pin-grip');
-      if (grip && document.activeElement !== grip) grip.value = title(pin.note);
-      // A box that holds other boxes says so, quietly.
-      box.classList.toggle('deep', kernel.childPins(pin.note).length > 0);
       box.classList.toggle('focused', pin.id === focused);
     }
+    if (!outer) fit();
   }
 
-  /** A Type was redefined: rebuild the boxes drawn by it. */
+  /**
+   * A nested canvas shows the same layout, shrunk to fit what it holds — so a note
+   * on the screen is a small picture of the note you would see inside it.
+   */
+  function fit() {
+    const children = kernel.childPins(current);
+    if (!children.length) {
+      layer.style.transform = 'none';
+      return;
+    }
+    const right = Math.max(...children.map((p) => p.x + p.width));
+    const bottom = Math.max(...children.map((p) => p.y + p.height));
+    const room = viewport.getBoundingClientRect();
+    if (!room.width || !room.height) return;
+    const scale = Math.min(1, room.width / (right + GRID), room.height / (bottom + GRID));
+    layer.style.transform = `scale(${scale})`;
+  }
+
+  /** A Type was redefined: rebuild what it draws. */
   function remountType(name) {
-    for (const pin of kernel.pinsOfType(name)) if (boxes.has(pin.id)) drop(pin.id);
+    for (const pin of kernel.pinsOfType(name)) if (kids.has(pin.id)) drop(pin.id);
     render();
   }
 
-  // --- pointer -------------------------------------------------------------
+  // --- pointer (outermost only) --------------------------------------------
 
   function wirePointer() {
     on(viewport, 'pointerdown', (e) => {
@@ -311,17 +376,18 @@ export default function (host) {
       const pinId = box.dataset.pin;
       kernel.setFocus(pinId);
 
-      // The name field is a field: clicking it places a caret and nothing else.
-      if (e.target.closest('.pin-grip')) return;
-      // Selecting a box by its bar means no caret anywhere, so Delete deletes it.
-      if (!e.target.closest('.pin-face') && isTextField(document.activeElement)) {
+      // The name is a field: clicking it places a caret and nothing else.
+      if (e.target.closest('.canvas-name')) return;
+      // Grabbing a bar means no caret anywhere, so Delete deletes the box.
+      if (!e.target.closest('.canvas-text') && isTextField(document.activeElement)) {
         document.activeElement.blur();
       }
-      const grip = e.target.closest('.pin-drag') || e.target.closest('.pin-bar');
+
+      const grip = e.target.closest('.canvas-bar');
       const handle = e.target.closest('.pin-resize');
       if (!grip && !handle && !e.altKey) return;
 
-      // Alt+drag makes a second pin of the same box and drags that instead.
+      // Alt+drag makes a second pin of the same note and drags that instead.
       let target = pinId;
       if (e.altKey && !handle) {
         const pin = kernel.getPin(pinId);
@@ -406,9 +472,8 @@ export default function (host) {
     on(viewport, 'dblclick', (e) => {
       const box = e.target.closest ? e.target.closest('.pin') : null;
       if (box) {
-        // The whole bar is the way in, name field included — a 22px pad was too
-        // small a target to find. Word-select in the name is worth less than this.
-        if (e.target.closest('.pin-bar')) {
+        // The whole bar is the way in, name field included.
+        if (e.target.closest('.canvas-bar')) {
           e.preventDefault();
           enter(kernel.getPin(box.dataset.pin).note);
         }
@@ -419,7 +484,7 @@ export default function (host) {
     });
   }
 
-  // --- keys ----------------------------------------------------------------
+  // --- keys (outermost only) -----------------------------------------------
 
   function wireKeys() {
     on(window, 'keydown', (e) => {
@@ -450,8 +515,8 @@ export default function (host) {
         return;
       }
 
-      // Escape steps out one layer at a time: out of the text, then out of the
-      // selection, then out of the note. So Delete has something to delete.
+      // Escape steps out one layer at a time: out of the text, out of the
+      // selection, out of the note. So Delete has something to delete.
       if (e.key === 'Escape') {
         if (isTextField(document.activeElement)) document.activeElement.blur();
         else if (kernel.focus()) kernel.setFocus(null);
@@ -459,8 +524,6 @@ export default function (host) {
         return;
       }
 
-      // Cmd+Backspace removes the box you are in even while the caret is in it.
-      // Plain Backspace only removes one when you are not typing.
       if (e.key === 'Backspace' || e.key === 'Delete') {
         const pin = kernel.focus();
         if (pin && (mod || !isTextField(document.activeElement))) {
@@ -475,60 +538,145 @@ export default function (host) {
     });
   }
 
+  // --- the two shapes of the same thing ------------------------------------
+
+  /** Name, text, output: what every canvas shows about itself. */
+  function buildSelf(where, big) {
+    head = document.createElement('input');
+    head.className = big ? 'canvas-head' : 'canvas-name';
+    head.spellcheck = false;
+    head.placeholder = big ? 'untitled' : 'name';
+    head.value = nameOf(body());
+    on(head, 'input', () => rename(current, head.value));
+    on(head, 'keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      text.focus();
+    });
+
+    text = document.createElement('textarea');
+    text.className = 'canvas-text';
+    text.spellcheck = false;
+    text.placeholder = 'type';
+    text.value = restOf(body());
+    on(text, 'input', writeText);
+    on(text, 'keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        text.setRangeText('  ', text.selectionStart, text.selectionEnd, 'end');
+        writeText();
+        return;
+      }
+      if (e.key === 'Enter' && (e.shiftKey || e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        void run();
+      }
+    });
+
+    out = document.createElement('div');
+    out.className = 'canvas-out';
+
+    if (big) {
+      where.append(head);
+    } else {
+      bar = document.createElement('div');
+      bar.className = 'canvas-bar';
+      bar.append(head);
+      where.append(bar);
+    }
+  }
+
   return {
-    mount(box) {
-      root = box;
-      root.classList.add('canvas');
-      loadView();
+    mount(el) {
+      root = el;
+      root.classList.add(outer ? 'canvas' : 'canvas-nest');
+      if (outer) loadView();
 
-      head.className = 'canvas-head';
-      head.spellcheck = false;
-      head.placeholder = 'untitled';
-      on(head, 'input', () => rename(current, head.value));
+      buildSelf(root, outer);
 
-      viewport.className = 'canvas-viewport';
+      viewport = document.createElement('div');
+      viewport.className = outer ? 'canvas-viewport' : 'canvas-inside';
+      layer = document.createElement('div');
       layer.className = 'canvas-layer';
       viewport.append(layer);
-      root.append(head, viewport);
+
+      // Inside a nested canvas, its own text and its children share the space.
+      if (outer) {
+        root.append(viewport);
+      } else {
+        root.append(text, out, viewport);
+      }
 
       unwatch.push(
         kernel.watch((c) => {
-          if (c.kind === 'patch' && c.note === current) drawHead();
+          if (c.kind === 'patch' && c.note === current) {
+            drawName();
+            drawText();
+          }
           if (c.kind === 'pin:move' || c.kind === 'focus') paint();
           else render();
         }),
-        kernel.spine.subscribeAll((fact) => {
-          const data = fact.data || {};
-          if (fact.name === 'open-file' && typeof data.path === 'string') {
-            reveal(`file:${data.path}`, 'code', [640, 460]);
-          } else if (fact.name === 'defined' && typeof data.name === 'string') {
-            remountType(data.name);
-          }
-        }),
       );
 
-      wirePointer();
-      wireKeys();
-      drawHead();
+      if (outer) {
+        unwatch.push(
+          kernel.spine.subscribeAll((fact) => {
+            const data = fact.data || {};
+            if (fact.name === 'open-file' && typeof data.path === 'string') {
+              reveal(`file:${data.path}`, 'code', [640, 460]);
+            } else if (fact.name === 'defined' && typeof data.name === 'string') {
+              remountType(data.name);
+            }
+          }),
+        );
+        wirePointer();
+        wireKeys();
+      }
+
+      drawName();
       render();
+    },
+
+    focus() {
+      if (text) text.focus();
+    },
+
+    blur() {
+      if (text) {
+        text.blur();
+        writeText();
+      }
+    },
+
+    save() {
+      if (text) writeText();
+    },
+
+    onPatch() {
+      drawName();
+      drawText();
     },
 
     unmount() {
       stop.abort();
       for (const off of unwatch) off();
       unwatch.length = 0;
-      for (const id of [...boxes.keys()]) drop(id);
+      for (const id of [...kids.keys()]) drop(id);
       if (root) root.replaceChildren();
     },
 
-    // Read by tests, and by anything in a box that wants to drive the canvas.
+    // Read by tests, and by anything in a canvas that wants to drive this one.
     get noteId() {
       return current;
+    },
+    get depth() {
+      return depth;
     },
     enter,
     leave,
     reveal,
     render,
+    run,
   };
 }
 
