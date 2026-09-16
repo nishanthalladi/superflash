@@ -165,7 +165,7 @@ body {
   flex: none;
   display: flex;
   align-items: stretch;
-  height: 26px;
+  height: 32px;
   border-bottom: 1px solid #2a2a30;
   background: #1c1c22;
 }
@@ -174,11 +174,11 @@ body {
   flex: 1;
   min-width: 0;
   border: 0;
-  padding: 0 8px;
+  padding: 0 9px;
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .pin-grip:focus {
