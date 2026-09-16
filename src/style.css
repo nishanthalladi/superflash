@@ -228,6 +228,15 @@ body {
   color: #45454f;
 }
 
+/* The handle: drag from here, since the name beside it takes a caret. */
+.canvas-drag {
+  flex: 0 0 26px;
+  cursor: grab;
+  user-select: none;
+  background: radial-gradient(circle, #3a3a44 1px, transparent 1.2px);
+  background-size: 5px 5px;
+}
+
 .canvas-text {
   flex: 0 1 auto;
   min-height: 1.6em;

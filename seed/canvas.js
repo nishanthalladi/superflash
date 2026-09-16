@@ -615,12 +615,20 @@ export default function (host) {
 
     if (big) {
       where.append(head);
-    } else {
-      bar = document.createElement('div');
-      bar.className = 'canvas-bar';
-      bar.append(head);
-      where.append(bar);
+      return;
     }
+
+    bar = document.createElement('div');
+    bar.className = 'canvas-bar';
+
+    // Something to grab: the name beside it is a field, and a click there has to
+    // place a caret rather than start a drag.
+    const pad = document.createElement('div');
+    pad.className = 'canvas-drag';
+    pad.title = 'drag to move, double-click to go inside';
+
+    bar.append(head, pad);
+    where.append(bar);
   }
 
   return {
