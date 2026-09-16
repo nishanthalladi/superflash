@@ -63,6 +63,20 @@ body {
   color: #3f3f49;
 }
 
+/* The outermost canvas shows its own text too — same parts, more room. */
+.canvas > .canvas-text {
+  flex: 0 1 auto;
+  max-height: 30%;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--edge);
+  background: #131317;
+  font-size: 13px;
+}
+
+.canvas > .canvas-text:empty {
+  display: none;
+}
+
 .canvas-viewport {
   position: relative;
   flex: 1;
@@ -238,11 +252,16 @@ body {
   overflow: hidden;
   /* A preview, not a control: you reach these by going inside. */
   pointer-events: none;
+  /* Nothing inside: the text gets the room instead. */
+  display: none;
 }
 
-.canvas-inside:empty,
-.canvas-inside > .canvas-layer:empty {
-  display: none;
+.canvas-nest.holds > .canvas-inside {
+  display: block;
+}
+
+.canvas-nest:not(.holds) > .canvas-text {
+  flex: 1;
 }
 
 .canvas-out {

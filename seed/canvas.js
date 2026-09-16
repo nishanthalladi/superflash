@@ -112,11 +112,13 @@ export default function (host) {
     if (outer) document.title = name || NAME;
   }
 
-  function drawText() {
-    if (!text || document.activeElement === text) return;
+  function drawText(force) {
+    if (!text || (!force && document.activeElement === text)) return;
     const tail = restOf(body());
     if (text.value === tail) return;
     text.value = tail;
+    // Show the start of the text, not wherever the last caret left it.
+    text.scrollTop = 0;
   }
 
   // --- running --------------------------------------------------------------
@@ -198,6 +200,8 @@ export default function (host) {
     if (i >= 0) trail.length = i + 1;
     else trail.push(note);
     drawName();
+    // The text belongs to the note you are now in: take it, focused or not.
+    drawText(true);
     render();
     saveView();
   }
@@ -342,6 +346,8 @@ export default function (host) {
    */
   function fit() {
     const children = kernel.childPins(current);
+    // With nothing inside, the text gets the whole box.
+    root.classList.toggle('holds', children.length > 0);
     if (!children.length) {
       layer.style.transform = 'none';
       return;
@@ -349,9 +355,21 @@ export default function (host) {
     const right = Math.max(...children.map((p) => p.x + p.width));
     const bottom = Math.max(...children.map((p) => p.y + p.height));
     const room = viewport.getBoundingClientRect();
+    // Nothing is laid out yet on the first pass; the observer below calls back.
     if (!room.width || !room.height) return;
     const scale = Math.min(1, room.width / (right + GRID), room.height / (bottom + GRID));
     layer.style.transform = `scale(${scale})`;
+  }
+
+  /**
+   * A preview only knows how much room it has once the browser has laid it out,
+   * and that is after mount. Re-fit whenever the room changes.
+   */
+  function watchRoom() {
+    if (typeof ResizeObserver !== 'function') return;
+    const eye = new ResizeObserver(() => fit());
+    eye.observe(viewport);
+    stop.signal.addEventListener('abort', () => eye.disconnect());
   }
 
   /** A Type was redefined: rebuild what it draws. */
@@ -600,12 +618,9 @@ export default function (host) {
       layer.className = 'canvas-layer';
       viewport.append(layer);
 
-      // Inside a nested canvas, its own text and its children share the space.
-      if (outer) {
-        root.append(viewport);
-      } else {
-        root.append(text, out, viewport);
-      }
+      // Name, text, output, children — the same order at every depth. The text
+      // has to be on screen: an off-screen one goes stale and writes back rubbish.
+      root.append(text, out, viewport);
 
       unwatch.push(
         kernel.watch((c) => {
@@ -631,6 +646,8 @@ export default function (host) {
         );
         wirePointer();
         wireKeys();
+      } else {
+        watchRoom();
       }
 
       drawName();
