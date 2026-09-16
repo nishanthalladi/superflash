@@ -106,7 +106,7 @@ describe('nesting: double-click enters a Note, Escape leaves', () => {
     const { instance: view } = mountCanvas(k, root, desk.id);
 
     expect(view.noteId).toBe(desk.id);
-    q(root, '.pin')[0]!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+    q(root, '.pin-grip')[0]!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
     expect(view.noteId).toBe(inner.id);
     expect(q(root, '.pin')).toHaveLength(2);
 

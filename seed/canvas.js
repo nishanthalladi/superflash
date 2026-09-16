@@ -4,7 +4,9 @@ export const type = { name: 'canvas', title: 'Canvas' };
  * A blank canvas of boxes. That is the whole thing.
  *
  * - double-click empty space → a new box, ready to type in
- * - double-click a box → go inside it; every box is itself a canvas
+ * - double-click a box's title bar → go inside it; every box is itself a canvas.
+ *   Inside, that note's own text is still there, full width at the top, and its
+ *   boxes are on the canvas below. Going in is a zoom, not a change of subject.
  * - Escape → come back out
  * - drag the title bar to move, the corner to resize, Cmd+D for a second pin of
  *   the same box, Backspace to remove one
@@ -17,6 +19,7 @@ export const type = { name: 'canvas', title: 'Canvas' };
  */
 
 const VIEW_KEY = 'superflash:view:v2';
+const NAME = 'Superflash';
 const GRID = 8;
 const MIN = 64;
 const snap = (v) => Math.round(v / GRID) * GRID;
@@ -31,6 +34,7 @@ export default function (host) {
   const unwatch = [];
 
   let root;
+  const head = document.createElement('textarea');
   const viewport = document.createElement('div');
   const layer = document.createElement('div');
 
@@ -96,6 +100,7 @@ export default function (host) {
     const i = trail.indexOf(note);
     if (i >= 0) trail.length = i + 1;
     else trail.push(note);
+    drawHead();
     render();
     saveView();
   }
@@ -163,6 +168,22 @@ export default function (host) {
     });
   }
 
+  /** The first line of a note's body is its name. Nothing else names anything. */
+  function title(noteId) {
+    const body = kernel.hasNote(noteId) ? kernel.body(noteId) : '';
+    const line = body.split('\n').find((l) => l.trim()) || '';
+    return line.trim().slice(0, 60);
+  }
+
+  /**
+   * The note you are inside, at the top, editable — the same text you saw in the
+   * box before you came in. Not a copy: it writes straight through to the Note.
+   */
+  function drawHead() {
+    if (document.activeElement !== head) head.value = kernel.body(current);
+    document.title = title(current) || NAME;
+  }
+
   // --- drawing -------------------------------------------------------------
 
   function render() {
@@ -183,6 +204,7 @@ export default function (host) {
 
     const grip = document.createElement('div');
     grip.className = 'pin-grip';
+    grip.title = 'double-click to go inside';
 
     const face = document.createElement('div');
     face.className = 'pin-face';
@@ -224,6 +246,8 @@ export default function (host) {
       box.style.top = `${pin.y}px`;
       box.style.width = `${pin.width}px`;
       box.style.height = `${pin.height}px`;
+      const grip = box.firstElementChild;
+      if (grip) grip.textContent = title(pin.note);
       // A box that holds other boxes says so, quietly.
       box.classList.toggle('deep', kernel.childPins(pin.note).length > 0);
       box.classList.toggle('focused', pin.id === focused);
@@ -340,9 +364,17 @@ export default function (host) {
 
     on(viewport, 'dblclick', (e) => {
       const box = e.target.closest ? e.target.closest('.pin') : null;
+      if (box) {
+        // The title bar is the way in. Inside the box you are editing, not
+        // navigating — a double-click there selects a word, as it should.
+        if (e.target.closest('.pin-grip')) {
+          e.preventDefault();
+          enter(kernel.getPin(box.dataset.pin).note);
+        }
+        return;
+      }
       e.preventDefault();
-      if (box) enter(kernel.getPin(box.dataset.pin).note);
-      else place(at(e));
+      place(at(e));
     });
   }
 
@@ -403,13 +435,19 @@ export default function (host) {
       root.classList.add('canvas');
       loadView();
 
+      head.className = 'canvas-head';
+      head.spellcheck = false;
+      head.placeholder = 'untitled';
+      on(head, 'input', () => kernel.patch(current, head.value));
+
       viewport.className = 'canvas-viewport';
       layer.className = 'canvas-layer';
       viewport.append(layer);
-      root.append(viewport);
+      root.append(head, viewport);
 
       unwatch.push(
         kernel.watch((c) => {
+          if (c.kind === 'patch' && c.note === current) drawHead();
           if (c.kind === 'pin:move' || c.kind === 'focus') paint();
           else render();
         }),
@@ -425,6 +463,7 @@ export default function (host) {
 
       wirePointer();
       wireKeys();
+      drawHead();
       render();
     },
 

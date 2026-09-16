@@ -68,8 +68,14 @@ describe('a box is a canvas too', () => {
     const hello = kernel.childPins(outer)[0]!;
     const instance = kernel.instance(shell!) as unknown as { noteId: string };
 
+    // The title bar is the way in; the text is for editing.
     root
-      .querySelector<HTMLElement>('.pin')!
+      .querySelector<HTMLElement>('.pin .pin-face')!
+      .dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+    expect(instance.noteId).toBe(outer);
+
+    root
+      .querySelector<HTMLElement>('.pin .pin-grip')!
       .dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
     expect(instance.noteId).toBe(hello.note);
     expect(root.querySelectorAll('.canvas-layer > .pin')).toHaveLength(0);
@@ -77,6 +83,33 @@ describe('a box is a canvas too', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(instance.noteId).toBe(outer);
     expect(root.querySelectorAll('.canvas-layer > .pin')).toHaveLength(1);
+  });
+
+  it('keeps the note you are inside editable at the top', async () => {
+    const root = host();
+    const { kernel, shell } = await stage0(root, memoryStore(), { fs: null });
+    const hello = kernel.childPins(canvasNote(kernel))[0]!;
+    const instance = kernel.instance(shell!) as unknown as { enter(note: string): void };
+
+    instance.enter(hello.note);
+    const head = root.querySelector<HTMLTextAreaElement>('.canvas-head')!;
+    // The same text that was in the box, not a title stripped of its body.
+    expect(head.value).toBe(kernel.body(hello.note));
+
+    head.value = 'renamed\nand the rest';
+    head.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(kernel.body(hello.note)).toBe('renamed\nand the rest');
+    // The first line names the note: the tab and the box's title bar both use it.
+    expect(document.title).toBe('renamed');
+  });
+
+  it('puts the first line of a box on its title bar', async () => {
+    const root = host();
+    const { kernel } = await stage0(root, memoryStore(), { fs: null });
+    const hello = kernel.childPins(canvasNote(kernel))[0]!;
+
+    kernel.patch(hello.note, 'INSTRUCTIONS\nDouble-click empty space for a box.');
+    expect(root.querySelector('.pin .pin-grip')!.textContent).toBe('INSTRUCTIONS');
   });
 
   it('marks a box that has boxes inside it', async () => {

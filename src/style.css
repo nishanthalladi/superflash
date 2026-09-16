@@ -39,6 +39,32 @@ body {
   min-height: 0;
 }
 
+/* The note you are inside: its own text, at the top, full width. */
+.canvas-head {
+  flex: 0 0 auto;
+  min-height: 2.6em;
+  max-height: 38%;
+  resize: vertical;
+  border: 0;
+  border-bottom: 1px solid var(--edge);
+  padding: 10px 14px;
+  background: #131317;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.canvas-head:focus {
+  outline: none;
+  background: #16161b;
+}
+
+.canvas-head::placeholder {
+  color: #3f3f49;
+}
+
 .canvas-viewport {
   position: relative;
   flex: 1;
@@ -138,9 +164,16 @@ body {
 
 .pin-grip {
   flex: none;
-  height: 12px;
+  height: 16px;
+  padding: 0 6px;
   border-bottom: 1px solid #2a2a30;
   background: #1c1c22;
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: grab;
   user-select: none;
 }
