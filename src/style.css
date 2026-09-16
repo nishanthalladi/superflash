@@ -42,15 +42,15 @@ body {
 /* The name of the note you are inside: the first line of its body, centred. */
 .canvas-head {
   flex: 0 0 auto;
-  height: 64px;
+  height: 38px;
+  line-height: 38px;
   border: 0;
   border-bottom: 1px solid var(--edge);
   padding: 0 16px;
   background: #131317;
   color: var(--ink);
   font: inherit;
-  font-size: 20px;
-  letter-spacing: 0.02em;
+  font-size: 13px;
   text-align: center;
 }
 
@@ -160,25 +160,46 @@ body {
   white-space: pre-wrap;
 }
 
-.pin-grip {
+/* The title bar: the note's name, and the only place you drag or enter from. */
+.pin-bar {
   flex: none;
-  height: 16px;
-  padding: 0 6px;
+  display: flex;
+  align-items: stretch;
+  height: 26px;
   border-bottom: 1px solid #2a2a30;
   background: #1c1c22;
-  color: var(--dim);
-  font-size: 10px;
-  line-height: 16px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.pin-grip {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.pin-grip:focus {
+  outline: none;
+}
+
+.pin-grip::placeholder {
+  color: #45454f;
+}
+
+.pin-drag {
+  flex: 0 0 22px;
   cursor: grab;
   user-select: none;
+  background: radial-gradient(circle, #3a3a44 1px, transparent 1.2px);
+  background-size: 5px 5px;
 }
 
 /* A box with boxes inside it says so, quietly. */
-.pin.deep .pin-grip {
-  background: repeating-linear-gradient(90deg, #1c1c22 0 6px, #2a2a34 6px 12px);
+.pin.deep .pin-bar {
+  background: repeating-linear-gradient(90deg, #1c1c22 0 6px, #24242c 6px 12px);
 }
 
 .pin-face {

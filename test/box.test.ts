@@ -77,11 +77,13 @@ describe("a box's powers", () => {
   });
 
   it('writes its own body as you type', () => {
-    const { kernel, el, note } = setup('before');
+    const { kernel, el, note } = setup('a name');
     const source = el.querySelector<HTMLTextAreaElement>('.box-text')!;
-    source.value = 'after';
+    // The name line is the canvas's title bar; the box edits what is under it.
+    expect(source.value).toBe('');
+    source.value = 'typed';
     source.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(kernel.body(note.id)).toBe('after');
+    expect(kernel.body(note.id)).toBe('a name\ntyped');
   });
 
   it('never stores its output', async () => {

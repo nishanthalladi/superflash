@@ -115,10 +115,10 @@ export default function (host) {
 
   // --- making things -------------------------------------------------------
 
-  /** A new, empty box where you clicked. */
+  /** A new, empty box where you clicked, ready to be named. */
   function place(point, type_ = 'box') {
     if (!kernel.types.has(type_)) return null;
-    return kernel.journal.transact('place', () => {
+    const id = kernel.journal.transact('place', () => {
       const note = kernel.createNote('');
       const pin = kernel.pin(note.id, current, type_, {
         x: snap(point.x - 130),
@@ -129,6 +129,10 @@ export default function (host) {
       kernel.setFocus(pin.id);
       return pin.id;
     });
+    // The name comes first, so that is where the caret goes.
+    const grip = boxes.get(id) && boxes.get(id).querySelector('.pin-grip');
+    if (grip) grip.focus();
+    return id;
   }
 
   /** Cmd+D: another pin of the same box. One body, two places. */
@@ -185,13 +189,13 @@ export default function (host) {
     document.title = title(current) || NAME;
   }
 
-  function renameCurrent(name) {
-    const body = kernel.body(current);
-    const lines = body.split('\n');
+  /** Rewrite a note's name line and leave the rest of its text alone. */
+  function rename(noteId, name) {
+    const lines = kernel.body(noteId).split('\n');
     const at = lines.findIndex((l) => l.trim());
     if (at < 0) lines.splice(0, lines.length, name);
     else lines[at] = name;
-    kernel.patch(current, lines.join('\n'));
+    kernel.patch(noteId, lines.join('\n'));
   }
 
   // --- drawing -------------------------------------------------------------
@@ -212,9 +216,30 @@ export default function (host) {
     box.dataset.pin = pin.id;
     box.dataset.type = pin.type;
 
-    const grip = document.createElement('div');
+    // The title bar *is* the name: an input on the note's first line. So the name
+    // is never on screen twice, and typing it never makes text jump.
+    const bar = document.createElement('div');
+    bar.className = 'pin-bar';
+
+    const grip = document.createElement('input');
     grip.className = 'pin-grip';
-    grip.title = 'double-click to go inside';
+    grip.spellcheck = false;
+    grip.placeholder = 'name';
+    grip.value = title(pin.note);
+    on(grip, 'input', () => rename(pin.note, grip.value));
+    on(grip, 'keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const inside = box.querySelector('.pin-face textarea, .pin-face input');
+      if (inside) inside.focus();
+    });
+
+    // Drag and enter live here, so a click on the name only ever places a caret.
+    const drag = document.createElement('div');
+    drag.className = 'pin-drag';
+    drag.title = 'drag to move, double-click to go inside';
+
+    bar.append(grip, drag);
 
     const face = document.createElement('div');
     face.className = 'pin-face';
@@ -222,7 +247,7 @@ export default function (host) {
     const handle = document.createElement('div');
     handle.className = 'pin-resize';
 
-    box.append(grip, face, handle);
+    box.append(bar, face, handle);
     layer.append(box);
     boxes.set(pin.id, box);
 
@@ -256,8 +281,8 @@ export default function (host) {
       box.style.top = `${pin.y}px`;
       box.style.width = `${pin.width}px`;
       box.style.height = `${pin.height}px`;
-      const grip = box.firstElementChild;
-      if (grip) grip.textContent = title(pin.note);
+      const grip = box.querySelector('.pin-grip');
+      if (grip && document.activeElement !== grip) grip.value = title(pin.note);
       // A box that holds other boxes says so, quietly.
       box.classList.toggle('deep', kernel.childPins(pin.note).length > 0);
       box.classList.toggle('focused', pin.id === focused);
@@ -286,7 +311,9 @@ export default function (host) {
       const pinId = box.dataset.pin;
       kernel.setFocus(pinId);
 
-      const grip = e.target.closest('.pin-grip');
+      // The name field is a field: clicking it places a caret and nothing else.
+      if (e.target.closest('.pin-grip')) return;
+      const grip = e.target.closest('.pin-drag') || e.target.closest('.pin-bar');
       const handle = e.target.closest('.pin-resize');
       if (!grip && !handle && !e.altKey) return;
 
@@ -375,9 +402,9 @@ export default function (host) {
     on(viewport, 'dblclick', (e) => {
       const box = e.target.closest ? e.target.closest('.pin') : null;
       if (box) {
-        // The title bar is the way in. Inside the box you are editing, not
-        // navigating — a double-click there selects a word, as it should.
-        if (e.target.closest('.pin-grip')) {
+        // The bar is the way in — but not the name field on it, where a
+        // double-click selects a word, as it should.
+        if (e.target.closest('.pin-bar') && !e.target.closest('.pin-grip')) {
           e.preventDefault();
           enter(kernel.getPin(box.dataset.pin).note);
         }
@@ -425,9 +452,11 @@ export default function (host) {
         return;
       }
 
+      // Cmd+Backspace removes the box you are in even while the caret is in it.
+      // Plain Backspace only removes one when you are not typing.
       if (e.key === 'Backspace' || e.key === 'Delete') {
         const pin = kernel.focus();
-        if (pin && !isTextField(document.activeElement)) {
+        if (pin && (mod || !isTextField(document.activeElement))) {
           e.preventDefault();
           kernel.unpin(pin);
         }
@@ -448,7 +477,7 @@ export default function (host) {
       head.className = 'canvas-head';
       head.spellcheck = false;
       head.placeholder = 'untitled';
-      on(head, 'input', () => renameCurrent(head.value));
+      on(head, 'input', () => rename(current, head.value));
 
       viewport.className = 'canvas-viewport';
       layer.className = 'canvas-layer';

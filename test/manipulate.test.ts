@@ -18,7 +18,8 @@ function setup(pins = 2) {
   return { k, desk, root, view, pins: made };
 }
 
-const grip = (root: HTMLElement, i = 0) => [...root.querySelectorAll<HTMLElement>('.pin-grip')][i]!;
+/** The drag pad on the title bar. The name field beside it only takes a caret. */
+const grip = (root: HTMLElement, i = 0) => [...root.querySelectorAll<HTMLElement>('.pin-drag')][i]!;
 const handle = (root: HTMLElement, i = 0) => [...root.querySelectorAll<HTMLElement>('.pin-resize')][i]!;
 const down = (el: HTMLElement, o: MouseEventInit = {}) =>
   el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, ...o }));

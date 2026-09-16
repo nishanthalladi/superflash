@@ -15,6 +15,10 @@ import { loadSource } from '../kernel/modules';
  * box is a note until what you type in it says otherwise. Every box is also a
  * canvas — double-click it to go inside.
  *
+ * The first line of the body is the box's name, and the canvas draws it on the
+ * title bar — so the box itself shows everything *after* that line. The name is
+ * never on screen twice.
+ *
  * It holds `shell`, so a box can rebuild the app it is running inside. That is
  * the point of it, not an oversight.
  */
@@ -37,11 +41,13 @@ export function box(host: Host): TypeInstance {
   }
 
   async function run(): Promise<void> {
-    host.write(text.value);
+    // Run the whole body, name line included — a box that is code is code from
+    // its first line, and the title bar is only where that line is shown.
+    host.write(join(host.read(host.pin.note), text.value));
     out.textContent = '…';
     out.classList.remove('bad');
     try {
-      const mod = await loadSource(text.value);
+      const mod = await loadSource(host.read(host.pin.note));
       const value =
         typeof mod['default'] === 'function'
           ? await (mod['default'] as (h: Host) => unknown)(host)
@@ -70,9 +76,9 @@ export function box(host: Host): TypeInstance {
       text = document.createElement('textarea');
       text.className = 'box-text';
       text.spellcheck = false;
-      text.value = note.body;
+      text.value = rest(note.body);
       text.placeholder = 'type';
-      text.addEventListener('input', () => host.write(text.value));
+      text.addEventListener('input', () => host.write(join(host.read(host.pin.note), text.value)));
       text.addEventListener('keydown', (e) => {
         if (e.key === 'Tab') {
           e.preventDefault();
@@ -106,21 +112,37 @@ export function box(host: Host): TypeInstance {
     },
 
     save() {
-      host.write(text.value);
+      host.write(join(host.read(host.pin.note), text.value));
     },
 
     onPatch(note: Note) {
       // The body changed underneath us — another pin of this Note, or something
       // outside the app. Take it, and keep the caret where it was.
-      if (text.value === note.body) return;
+      const body = rest(note.body);
+      if (text.value === body) return;
       const from = text.selectionStart;
       const to = text.selectionEnd;
-      text.value = note.body;
+      text.value = body;
       if (document.activeElement === text) {
-        text.setSelectionRange(Math.min(from, note.body.length), Math.min(to, note.body.length));
+        text.setSelectionRange(Math.min(from, body.length), Math.min(to, body.length));
       }
     },
   };
+}
+
+/** Everything after the name line. */
+function rest(body: string): string {
+  const lines = body.split('\n');
+  const at = lines.findIndex((l) => l.trim());
+  return at < 0 ? '' : lines.slice(at + 1).join('\n');
+}
+
+/** Put the name back on the front of what the box shows. */
+function join(body: string, tail: string): string {
+  const lines = body.split('\n');
+  const at = lines.findIndex((l) => l.trim());
+  const head = at < 0 ? '' : lines.slice(0, at + 1).join('\n');
+  return head === '' ? tail : `${head}\n${tail}`;
 }
 
 /** Output is view state — never stored, so a lossy render is fine. */

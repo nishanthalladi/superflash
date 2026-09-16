@@ -68,14 +68,16 @@ describe('a box is a canvas too', () => {
     const hello = kernel.childPins(outer)[0]!;
     const instance = kernel.instance(shell!) as unknown as { noteId: string };
 
-    // The title bar is the way in; the text is for editing.
-    root
-      .querySelector<HTMLElement>('.pin .pin-face')!
-      .dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
-    expect(instance.noteId).toBe(outer);
+    // The title bar is the way in; the text and the name field are for editing.
+    for (const sel of ['.pin .pin-face', '.pin .pin-grip']) {
+      root.querySelector<HTMLElement>(sel)!.dispatchEvent(
+        new MouseEvent('dblclick', { bubbles: true, cancelable: true }),
+      );
+      expect(instance.noteId).toBe(outer);
+    }
 
     root
-      .querySelector<HTMLElement>('.pin .pin-grip')!
+      .querySelector<HTMLElement>('.pin .pin-drag')!
       .dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
     expect(instance.noteId).toBe(hello.note);
     expect(root.querySelectorAll('.canvas-layer > .pin')).toHaveLength(0);
@@ -103,13 +105,40 @@ describe('a box is a canvas too', () => {
     expect(document.title).toBe('renamed');
   });
 
-  it('puts the first line of a box on its title bar', async () => {
+  it('puts the name on the title bar and only the rest in the box', async () => {
     const root = host();
     const { kernel } = await stage0(root, memoryStore(), { fs: null });
     const hello = kernel.childPins(canvasNote(kernel))[0]!;
 
-    kernel.patch(hello.note, 'INSTRUCTIONS\nDouble-click empty space for a box.');
-    expect(root.querySelector('.pin .pin-grip')!.textContent).toBe('INSTRUCTIONS');
+    kernel.patch(hello.note, 'INSTRUCTIONS\ndouble-click empty space.');
+    expect(root.querySelector<HTMLInputElement>('.pin .pin-grip')!.value).toBe('INSTRUCTIONS');
+    // Not twice: the box shows what is left after the name.
+    expect(root.querySelector<HTMLTextAreaElement>('.pin .box-text')!.value).toBe('double-click empty space.');
+  });
+
+  it('renames from the title bar without touching the rest', async () => {
+    const root = host();
+    const { kernel } = await stage0(root, memoryStore(), { fs: null });
+    const hello = kernel.childPins(canvasNote(kernel))[0]!;
+    kernel.patch(hello.note, 'old name\nbody stays');
+
+    const grip = root.querySelector<HTMLInputElement>('.pin .pin-grip')!;
+    grip.value = 'new name';
+    grip.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(kernel.body(hello.note)).toBe('new name\nbody stays');
+  });
+
+  it('deletes the focused box on Cmd+Backspace, even mid-word', async () => {
+    const root = host();
+    const { kernel } = await stage0(root, memoryStore(), { fs: null });
+    const hello = kernel.childPins(canvasNote(kernel))[0]!;
+
+    root.querySelector<HTMLTextAreaElement>('.pin .box-text')!.focus();
+    kernel.setFocus(hello.id);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true }));
+
+    expect(kernel.hasPin(hello.id)).toBe(false);
   });
 
   it('marks a box that has boxes inside it', async () => {
@@ -145,32 +174,38 @@ describe('editing the app from inside the app', () => {
     expect(JSON.stringify(kernel.toJSON())).toBe(doc);
   });
 
-  it('runs a box and shows what came out', async () => {
+  it('runs the whole body, name line and all', async () => {
     const root = host();
-    await stage0(root, memoryStore(), { fs: fakeFs({ 'src/a.ts': 'a' }).fs });
+    const { kernel } = await stage0(root, memoryStore(), { fs: fakeFs({ 'src/a.ts': 'a' }).fs });
+    const hello = kernel.childPins(canvasNote(kernel))[0]!;
     const el = root.querySelector<HTMLElement>('.pin[data-type="box"]')!;
-    const text = el.querySelector<HTMLTextAreaElement>('.box-text')!;
 
-    text.value = "export default async (h) => (await h.fs().git(['status', '--porcelain'])).stdout;";
-    text.dispatchEvent(new Event('input', { bubbles: true }));
-
+    // A box that is code names itself with a comment; the name still runs.
+    kernel.patch(
+      hello.note,
+      "// what changed\nexport default async (h) => (await h.fs().git(['status', '--porcelain'])).stdout;",
+    );
+    expect(root.querySelector<HTMLInputElement>('.pin-grip')!.value).toBe('// what changed');
     expect(await runBox(el)).toContain('src/a.ts');
   });
 
   it('lets a box build a Type and place it, with no file touched', async () => {
     const root = host();
     const { kernel } = await stage0(root, memoryStore(), { fs: null });
+    const hello = kernel.childPins(canvasNote(kernel))[0]!;
     const el = root.querySelector<HTMLElement>('.pin[data-type="box"]')!;
-    const text = el.querySelector<HTMLTextAreaElement>('.box-text')!;
 
-    text.value = `export default async (host) => {
-      const k = host.kernel();
-      const note = k.createNote(\`export const type = { name: 'tick', title: 'Tick' };
-        export default () => ({ mount: (el) => { el.textContent = 'tock'; } });\`);
-      await k.defineModule(note.id);
-      return k.pin(k.createNote('').id, host.pin.parent, 'tick').id;
-    };`;
-    text.dispatchEvent(new Event('input', { bubbles: true }));
+    kernel.patch(
+      hello.note,
+      `// make a Type
+      export default async (host) => {
+        const k = host.kernel();
+        const note = k.createNote(\`export const type = { name: 'tick', title: 'Tick' };
+          export default () => ({ mount: (el) => { el.textContent = 'tock'; } });\`);
+        await k.defineModule(note.id);
+        return k.pin(k.createNote('').id, host.pin.parent, 'tick').id;
+      };`,
+    );
     await runBox(el);
     await until(() => kernel.types.has('tick'));
 
