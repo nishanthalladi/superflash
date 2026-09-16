@@ -2,7 +2,7 @@ import type { Kernel } from './kernel/kernel';
 import type { NoteId } from './kernel/model';
 
 /**
- * The shell of last resort. Mounted when the `desk` module will not compile or
+ * The shell of last resort. Mounted when the `canvas` module will not compile or
  * will not mount — a bare textarea per module Note, and a Run button. Ugly on
  * purpose: it only has to let you fix the Note that broke.
  *
@@ -70,5 +70,5 @@ export function safeShell(kernel: Kernel, mountPoint: HTMLElement, why: string):
   links.append(reload, fresh);
   root.append(links);
   // ponytail: no per-Note "reset to shipped" — needs a note→file map that only
-  // eject knows. Add it if a bad edit to desk.js ever costs someone real work.
+  // eject knows. Add it if a bad edit to canvas.js ever costs someone real work.
 }

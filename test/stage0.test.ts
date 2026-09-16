@@ -31,7 +31,7 @@ describe('what you see when it boots', () => {
     // No toolbar, no breadcrumb, no sidebar, nothing to click but the boxes.
     expect(root.querySelector('.palette')).toBeNull();
     expect(root.querySelector('.tree')).toBeNull();
-    expect(root.querySelector('.desk-bar')).toBeNull();
+    expect(root.querySelector('.superflash-bar')).toBeNull();
     expect(root.querySelectorAll('button')).toHaveLength(0);
   });
 

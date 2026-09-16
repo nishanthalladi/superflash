@@ -57,7 +57,7 @@ export interface Host {
   /** What Types exist right now. Needs `types`. */
   listTypes(): TypeInfo[];
   /**
-   * The kernel itself. Needs `shell`. This is what lets the Desk live in the
+   * The kernel itself. Needs `shell`. This is what lets the canvas live in the
    * document instead of in `src/`: it can mount pins, move them, walk
    * containment. Everything a sandboxed Type must not do.
    */
@@ -71,17 +71,17 @@ export interface Host {
 }
 
 export interface TypeInstance {
-  /** Draw into this element. The element is sized and positioned by the Desk. */
+  /** Draw into this element. The element is sized and positioned by the canvas. */
   mount(box: HTMLElement, note: Note): void;
   focus?(): void;
   blur?(): void;
-  /** Write body. Called by the Desk before unmount and on demand. */
+  /** Write body. Called by the canvas before unmount and on demand. */
   save?(): void;
   /** A fact arrived from a Note this pin subscribes to. */
   onSpine?(fact: Fact): void;
   /** The Note body changed underneath this pin (another pin edited it). */
   onPatch?(note: Note): void;
-  /** Keyboard, routed by the Desk to the focused pin only. */
+  /** Keyboard, routed by the canvas to the focused pin only. */
   onKey?(event: KeyboardEvent): void;
   unmount?(): void;
 }

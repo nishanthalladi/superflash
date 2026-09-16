@@ -8,7 +8,7 @@ let root: string;
 let outside: string;
 
 beforeAll(async () => {
-  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'desk-bridge-'));
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'superflash-bridge-'));
   root = path.join(base, 'repo');
   outside = path.join(base, 'secrets');
   await fs.mkdir(path.join(root, 'src'), { recursive: true });

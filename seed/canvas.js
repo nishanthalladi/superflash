@@ -16,7 +16,7 @@ export const type = { name: 'canvas', title: 'Canvas' };
  * `kernel.move`, so undo and autosave see all of it.
  */
 
-const VIEW_KEY = 'desk:view:v2';
+const VIEW_KEY = 'superflash:view:v2';
 const GRID = 8;
 const MIN = 64;
 const snap = (v) => Math.round(v / GRID) * GRID;

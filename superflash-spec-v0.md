@@ -1,4 +1,4 @@
-# Desk spec v0
+# Superflash spec v0
 
 A spatial notebook. Everything is a **Note**. Notes sit on Notes. Some Notes run.
 
@@ -7,7 +7,7 @@ A spatial notebook. Everything is a **Note**. Notes sit on Notes. Some Notes run
 - **Note** — one id, one body. Always a canvas: it can hold other Notes.
 - **Pin** — one placement of a Note on a parent Note (`x`, `y`, `width`, `height`).
 - **Type** — the behavior of a pin (what you see and what it does).
-- **Desk** — the viewer: pan, zoom, click, focus.
+- **Superflash** — the viewer: pan, zoom, click, focus.
 - **Spine** — a simple event channel. Notes publish facts; Notes subscribe.
 - **Machine** — an optional worker a Type may start. No window, no raw disk.
 - **Grant** — a permission a Machine must have to touch anything except itself.
@@ -19,7 +19,7 @@ A spatial notebook. Everything is a **Note**. Notes sit on Notes. Some Notes run
 3. Only one pin is focused.
 4. Keyboard input goes to the focused pin only.
 5. A Note cannot contain itself (no loops).
-6. If a Note has exactly one pin, the Desk shows that Type full screen. If it has two or more, you see the canvas.
+6. If a Note has exactly one pin, the canvas shows that Type full screen. If it has two or more, you see the canvas.
 7. A Machine may read another Note only with a grant.
 8. A Machine cannot touch the DOM.
 

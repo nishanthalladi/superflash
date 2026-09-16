@@ -11,7 +11,7 @@ export class Spine {
   private all = new Set<Handler>();
 
   /**
-   * Hear every fact. For the Desk only — it is the shell, and it has to react to
+   * Hear every fact. For the canvas only — it is the shell, and it has to react to
    * facts from chrome it did not itself subscribe to. Types use `subscribe`.
    */
   subscribeAll(handler: Handler): () => void {

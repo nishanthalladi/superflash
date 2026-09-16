@@ -1,8 +1,8 @@
 import type { Doc, Kernel } from './kernel';
 
-export const DOC_KEY = 'desk:doc:v3';
-export const VIEW_KEY = 'desk:view:v1';
-export const SNAP_KEY = 'desk:snap';
+export const DOC_KEY = 'superflash:doc:v3';
+export const VIEW_KEY = 'superflash:view:v1';
+export const SNAP_KEY = 'superflash:snap';
 export const SNAP_KEEP = 5;
 
 /** The slice of localStorage we actually use, so tests can pass a fake. */
@@ -97,7 +97,7 @@ export function autosave(
   };
 }
 
-/** Where the Desk keeps camera and breadcrumb — view state, not document state. */
+/** Where the canvas keeps camera and breadcrumb — view state, not document state. */
 export interface View {
   at: string;
   trail: string[];

@@ -125,7 +125,7 @@ describe('create and delete', () => {
 
     const note = k.getPin(pins[0]!.id).note;
     expect(k.pinsOf(note)).toHaveLength(2);
-    // desk, n0, n1 and the shell Note the Desk is pinned on.
+    // desk, n0, n1 and the shell Note the canvas is pinned on.
     expect(k.allNotes()).toHaveLength(4);
   });
 });

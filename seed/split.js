@@ -7,7 +7,7 @@ export const type = { name: 'split', title: 'Split' };
  * This is what replaced `chrome`. Nothing is a privileged layer any more: the
  * sidebar is always visible because it is a pane in a split, not because the
  * kernel knows it is furniture. Splits nest, so the toolbar is a `col` above a
- * `row` of [tree, desk].
+ * `row` of [tree, canvas].
  *
  * Sizes are `pin.width` / `pin.height`, so a dragged divider goes through
  * `kernel.move` — which means the layout is in the document, undoable, and

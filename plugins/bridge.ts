@@ -8,7 +8,7 @@ import type { Plugin } from 'vite';
  * The bridge: the repo, over HTTP, in dev only.
  *
  * This is the trust boundary for v2. Not the grants — a Type runs in the page and
- * the page has `fetch`, so anything on the desk can reach these routes. What
+ * the page has `fetch`, so anything on the canvas can reach these routes. What
  * actually holds is enforced here: paths cannot leave the repo, git never sees a
  * shell, and a production build has no bridge at all (`apply: 'serve'`).
  */
@@ -163,11 +163,11 @@ export function bridge(options: { root?: string } = {}): Plugin {
   const root = options.root ?? process.cwd();
 
   return {
-    name: 'desk-bridge',
+    name: 'superflash-bridge',
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        const url = new URL(req.url ?? '/', 'http://desk');
+        const url = new URL(req.url ?? '/', 'http://superflash');
         if (!url.pathname.startsWith('/_fs/') && url.pathname !== '/_git') return next();
 
         const send = (code: number, value: unknown): void => {

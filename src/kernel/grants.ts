@@ -12,9 +12,9 @@ export const CREATE: Grant = 'create';
 export const TYPES: Grant = 'types';
 export const MACHINE: Grant = 'machine';
 /**
- * The whole kernel. Only the app's own furniture holds this — the Desk, which
- * has to mount pins, and a Cell, which is a console for editing the app from
- * inside itself. A Type written in the app gets it only if policy says so.
+ * The whole kernel. Only the app's own furniture holds this — the canvas, which has
+ * to mount pins, and a box, which is a console for editing the app from inside
+ * itself. A Type written in the app gets it only if policy says so.
  *
  * ponytail: one grant instead of a verb per kernel method. Narrow it into
  * individual verbs (mountPin, move, unpin, …) the day an untrusted Type needs
@@ -25,7 +25,7 @@ export const SHELL: Grant = 'shell';
  * The repo, through the dev bridge: list, read, write, git.
  *
  * This one is ergonomics and an audit trail, not a sandbox. A Type runs in the
- * page and the page has `fetch`, so anything on the desk could reach the bridge
+ * page and the page has `fetch`, so anything on the canvas could reach the bridge
  * on its own. What actually stops that is the bridge itself — path-jailed, and
  * absent from a production build. A Type that must be contained needs a Machine.
  */

@@ -13,6 +13,6 @@ stage0(app, localStorage, { fresh: flags.has('fresh'), safe: flags.has('safe') }
   };
   addEventListener('pagehide', flush);
   addEventListener('beforeunload', flush);
-  // A Cell can reach these: `globalThis.desk.eject()`.
-  Object.assign(globalThis, { desk: { ...booted, eject: () => ejectToDisk(booted.kernel) } });
+  // A box can reach these: `globalThis.superflash.eject()`.
+  Object.assign(globalThis, { superflash: { ...booted, eject: () => ejectToDisk(booted.kernel) } });
 });

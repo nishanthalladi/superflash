@@ -23,7 +23,7 @@ export function code(host: Host): TypeInstance {
     try {
       const info = await host.defineModule();
       say(`registered ${info.name}`);
-      // The Desk hears this and remounts every pin of that Type.
+      // The Superflash hears this and remounts every pin of that Type.
       host.emit('defined', { name: info.name });
     } catch (err) {
       say(err instanceof Error ? err.message : String(err), true);

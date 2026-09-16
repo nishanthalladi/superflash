@@ -1,6 +1,6 @@
-# Desk spec v3 — layout is a Type
+# Superflash spec v3 — layout is a Type
 
-v2 gave the tree a `chrome` Note: a privileged layer the Desk drew on top,
+v2 gave the tree a `chrome` Note: a privileged layer the canvas drew on top,
 floating over the canvas. That was wrong twice over — the sidebar wasn't really
 always-visible, it was just overlapping, and "chrome" was a special case in a
 system whose whole claim is that everything is a Note.
@@ -9,11 +9,11 @@ v3 deletes the special case.
 
 ## What changed
 
-- **`chrome` is gone** from the kernel, from `Doc`, and from the Desk.
+- **`chrome` is gone** from the kernel, from `Doc`, and from the canvas.
 - **`split`** is a new seed Type: a Note whose body is `row` or `col`, whose child
   pins are its panes, with a draggable divider between them. Splits nest.
 - The shell is now a `split`: a `col` of [palette, `row` of [tree, desk]]. The
-  Desk is one pane among others, and it no longer knows anything is above it.
+  Superflash is one pane among others, and it no longer knows anything is above it.
 
 No dock field. No layout engine in the kernel. Layout is a Type, so a project
 that wants a different shape writes one — the same answer as "a project that
@@ -33,7 +33,7 @@ document, not in view state, because a Pin already stores exactly that.
 
 ## Migration
 
-The stored-document key is now `desk:doc:v2` and `Doc.version` is `2`. A document
+The stored-document key is now `superflash:doc:v2` and `Doc.version` is `2`. A document
 written before `split` is simply left in the old key, and the shipped seed boots.
 Not worth migration code for a document you can rebuild by pressing `?fresh=1`.
 

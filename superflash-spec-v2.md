@@ -1,4 +1,4 @@
-# Desk spec v2 — the repo is the document
+# Superflash spec v2 — the repo is the document
 
 v1 put the app's own Types in the document. But `src/kernel/*` is still just
 files, and the app cannot see them. v2 closes that:
@@ -107,7 +107,7 @@ belongs in here.
 A sidebar. Boring on purpose.
 
 - Folders from the paths of the `file:` Notes. Collapsible, `>`/`v`.
-- Click a file: the tree emits `open-file`, and the Desk pins it on the Note you
+- Click a file: the tree emits `open-file`, and the canvas pins it on the Note you
   are looking at as `code`. Always `code`. One rule.
 - A pin already open for that Note gets focused instead of a second pin.
 - A `code` pin on a file Note shows the path and no Run button: a `.ts` file is a
@@ -169,5 +169,5 @@ Keep v0's ten and v1's six. Add:
 - `push` — needs credentials, so it needs a conversation about where those live.
 - The `agent` Type from v1, now much more interesting: it can read the whole
   repo, write a file, and commit.
-- Two people on one Desk. The Spine is already the right shape; the document is
+- Two people on one Superflash. The Spine is already the right shape; the document is
   not.

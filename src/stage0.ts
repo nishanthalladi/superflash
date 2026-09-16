@@ -63,7 +63,7 @@ export interface Stage0Options {
 /**
  * Boot order: load the document, compile its modules, then mount the one pin on
  * the root Note (rule 6 — one pin means that Type fills the screen). That pin is
- * the Desk, and the Desk is a Note like everything else.
+ * the canvas, and the canvas is a Note like everything else.
  */
 export async function stage0(root: HTMLElement, store: Store, options: Stage0Options = {}): Promise<Booted> {
   const kernel = new Kernel();

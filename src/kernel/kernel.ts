@@ -29,7 +29,7 @@ export interface Doc {
   pins: Pin[];
   focus: PinId | null;
   grants: [PinId, Grant[]][];
-  /** Notes that are Types. Registered before the Desk renders. */
+  /** Notes that are Types. Registered before the canvas renders. */
   modules: NoteId[];
 }
 
@@ -410,7 +410,7 @@ export class Kernel implements Undoable {
     };
   }
 
-  /** Register a live Type instance for a pin. The Desk owns the element. */
+  /** Register a live Type instance for a pin. The Superflash owns the element. */
   attach(pinId: PinId, instance: TypeInstance): void {
     this.detach(pinId);
     this.runtimes.set(pinId, { instance, unsubs: [], machines: [] });

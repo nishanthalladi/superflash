@@ -1,16 +1,16 @@
-# Desk spec v1 — self-hosting
+# Superflash spec v1 — self-hosting
 
 v0 got Notes, Pins, grants, and Types-from-Notes. But the app's own code still
 lives in `src/`. v1 fixes two things:
 
 1. **Everything is in the project.** `src/` shrinks to the kernel plus a ~30-line
-   bootstrap. The Desk, the palette, every Type: module Notes inside the document.
+   bootstrap. The Superflash, the palette, every Type: module Notes inside the document.
 2. **It's a notebook.** A `cell` Type: body is source, run it, see the output
    under it. That is the unit of work, not a stub box.
 
 ## The one new kernel verb
 
-Today only the Desk can mount a Type, because the Desk is the only thing that
+Today only the canvas can mount a Type, because the canvas is the only thing that
 imports the registry and owns elements. That is what keeps it outside the
 document. So: one verb, one grant.
 
@@ -20,13 +20,13 @@ kernel(): Kernel     // needs `shell`
 ```
 
 The spec first said `mountPin(pin, el)`. Mounting turned out to be one of about
-twenty things the Desk needs — it also moves pins, unpins them, walks
+twenty things the canvas needs — it also moves pins, unpins them, walks
 containment, drives the journal, subscribes to every fact. Twenty grant-checked
 verbs to sandbox the one Type that is *not* untrusted is the wrong trade, so:
 one grant that hands over the kernel, and a policy table that gives it to the
 furniture only.
 
-With that, **the Desk is just a Type**. Rule 6 already says a Note with one pin
+With that, **the canvas is just a Type**. Rule 6 already says a Note with one pin
 shows that Type full screen — the root Note has one pin, of type `desk`.
 
 Nothing else in the kernel changes. No new model, no new op.
@@ -54,7 +54,7 @@ stage0(root, store, { fresh, safe }):
   on types.watch: if the shell's factory changed, tear it down and mount again
 ```
 
-`Desk`, `palette` and `stub` are module Notes in the seed. The policy table is
+`canvas`, `palette` and `stub` are module Notes in the seed. The policy table is
 the only thing that stays behind, because it is the trust root.
 
 That last line is the one that makes this feel like a notebook: edit `desk.js`
@@ -144,7 +144,7 @@ the notebook; add ordering when running them by hand actually hurts.
 1. `host.kernel()` + `shell` grant. `test/cell.test.ts` — no grant, `Denied`.
 2. `cell` Type in `src/`. `test/cell.test.ts` — default export, `out`, `await`,
    a DOM node, a throw, a syntax error.
-3. `Desk` as a module Note; `stage0` replaces `boot`. `test/stage0.test.ts` —
+3. `canvas` as a module Note; `stage0` replaces `boot`. `test/stage0.test.ts` —
    the seed boots, and redefining `desk` remounts the shell live.
 4. `seed/` + `eject`. `test/eject.test.ts` — eject, rehydrate, boot, same `Doc`.
 5. `stub` and `palette` moved into `seed/`; `src/desk/`, `src/boot.ts`,
@@ -159,7 +159,7 @@ Type registry with no file touched (`test/stage0.test.ts`).
 Keep v0's ten. Add:
 
 11. A pin without `shell` cannot reach the kernel.
-12. Nothing in `src/` imports the Desk, the Stub or the palette — there is
+12. Nothing in `src/` imports the canvas, the Stub or the palette — there is
     nothing there to import.
 13. A module Note that fails to compile leaves the previous Type registered
     (v0 already holds this) and never prevents boot; if it was the shell, the

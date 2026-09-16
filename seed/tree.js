@@ -4,8 +4,8 @@ export const type = { name: 'tree', title: 'Tree' };
  * The sidebar. Boring on purpose — a filesystem view is the one thing everybody
  * already knows how to read.
  *
- * It lists the repo through the bridge and emits `open-file`; the Desk does the
- * pinning, because the Desk is the thing that knows where you are looking. So the
+ * It lists the repo through the bridge and emits `open-file`; the canvas does the
+ * pinning, because the canvas is the thing that knows where you are looking. So the
  * tree holds `fs` and nothing else.
  *
  * It is a Type, so a project that wants a different way in writes its own and

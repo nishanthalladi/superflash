@@ -35,7 +35,7 @@ function fresh() {
   return { k, desk };
 }
 
-/** Attach a headless instance the way the Desk would. */
+/** Attach a headless instance the way the canvas would. */
 function live(k: Kernel, pinId: string) {
   const inst = probe(k.host(pinId)) as ReturnType<typeof probe>;
   k.attach(pinId, inst);
