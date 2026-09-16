@@ -39,21 +39,19 @@ body {
   min-height: 0;
 }
 
-/* The note you are inside: its own text, at the top, full width. */
+/* The name of the note you are inside: the first line of its body, centred. */
 .canvas-head {
   flex: 0 0 auto;
-  min-height: 2.6em;
-  max-height: 38%;
-  resize: vertical;
+  height: 64px;
   border: 0;
   border-bottom: 1px solid var(--edge);
-  padding: 10px 14px;
+  padding: 0 16px;
   background: #131317;
   color: var(--ink);
   font: inherit;
-  font-size: 13px;
-  line-height: 1.55;
-  tab-size: 2;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  text-align: center;
 }
 
 .canvas-head:focus {

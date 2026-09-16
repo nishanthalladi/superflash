@@ -34,7 +34,7 @@ export default function (host) {
   const unwatch = [];
 
   let root;
-  const head = document.createElement('textarea');
+  const head = document.createElement('input');
   const viewport = document.createElement('div');
   const layer = document.createElement('div');
 
@@ -176,12 +176,22 @@ export default function (host) {
   }
 
   /**
-   * The note you are inside, at the top, editable — the same text you saw in the
-   * box before you came in. Not a copy: it writes straight through to the Note.
+   * The name of the note you are inside, big and centred. It is the first line of
+   * the body, not a separate field — editing it rewrites that line and leaves the
+   * rest of the text alone.
    */
   function drawHead() {
-    if (document.activeElement !== head) head.value = kernel.body(current);
+    if (document.activeElement !== head) head.value = title(current);
     document.title = title(current) || NAME;
+  }
+
+  function renameCurrent(name) {
+    const body = kernel.body(current);
+    const lines = body.split('\n');
+    const at = lines.findIndex((l) => l.trim());
+    if (at < 0) lines.splice(0, lines.length, name);
+    else lines[at] = name;
+    kernel.patch(current, lines.join('\n'));
   }
 
   // --- drawing -------------------------------------------------------------
@@ -438,7 +448,7 @@ export default function (host) {
       head.className = 'canvas-head';
       head.spellcheck = false;
       head.placeholder = 'untitled';
-      on(head, 'input', () => kernel.patch(current, head.value));
+      on(head, 'input', () => renameCurrent(head.value));
 
       viewport.className = 'canvas-viewport';
       layer.className = 'canvas-layer';

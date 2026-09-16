@@ -85,21 +85,21 @@ describe('a box is a canvas too', () => {
     expect(root.querySelectorAll('.canvas-layer > .pin')).toHaveLength(1);
   });
 
-  it('keeps the note you are inside editable at the top', async () => {
+  it('names the note you are inside, and renames it without eating the body', async () => {
     const root = host();
     const { kernel, shell } = await stage0(root, memoryStore(), { fs: null });
     const hello = kernel.childPins(canvasNote(kernel))[0]!;
     const instance = kernel.instance(shell!) as unknown as { enter(note: string): void };
+    const rest = kernel.body(hello.note).split('\n').slice(1).join('\n');
 
     instance.enter(hello.note);
-    const head = root.querySelector<HTMLTextAreaElement>('.canvas-head')!;
-    // The same text that was in the box, not a title stripped of its body.
-    expect(head.value).toBe(kernel.body(hello.note));
+    const head = root.querySelector<HTMLInputElement>('.canvas-head')!;
+    // The first line, not the whole body: the body is not repeated here.
+    expect(head.value).toBe('Instructions');
 
-    head.value = 'renamed\nand the rest';
+    head.value = 'renamed';
     head.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(kernel.body(hello.note)).toBe('renamed\nand the rest');
-    // The first line names the note: the tab and the box's title bar both use it.
+    expect(kernel.body(hello.note)).toBe(`renamed\n${rest}`);
     expect(document.title).toBe('renamed');
   });
 
