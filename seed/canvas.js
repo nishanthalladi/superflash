@@ -313,6 +313,10 @@ export default function (host) {
 
       // The name field is a field: clicking it places a caret and nothing else.
       if (e.target.closest('.pin-grip')) return;
+      // Selecting a box by its bar means no caret anywhere, so Delete deletes it.
+      if (!e.target.closest('.pin-face') && isTextField(document.activeElement)) {
+        document.activeElement.blur();
+      }
       const grip = e.target.closest('.pin-drag') || e.target.closest('.pin-bar');
       const handle = e.target.closest('.pin-resize');
       if (!grip && !handle && !e.altKey) return;
@@ -446,8 +450,11 @@ export default function (host) {
         return;
       }
 
+      // Escape steps out one layer at a time: out of the text, then out of the
+      // selection, then out of the note. So Delete has something to delete.
       if (e.key === 'Escape') {
-        if (kernel.focus()) kernel.setFocus(null);
+        if (isTextField(document.activeElement)) document.activeElement.blur();
+        else if (kernel.focus()) kernel.setFocus(null);
         else leave();
         return;
       }

@@ -108,7 +108,7 @@ export function box(host: Host): TypeInstance {
 
     blur() {
       text.blur();
-      host.write(text.value);
+      host.write(join(host.read(host.pin.note), text.value));
     },
 
     save() {
