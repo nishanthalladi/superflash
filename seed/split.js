@@ -1,4 +1,4 @@
-export const type = { name: 'split', title: 'Split' };
+export const type = { name: 'split', title: 'Split', lens: false };
 
 /**
  * Layout, as a Type. A Note whose body is `row` or `col`, and whose child pins

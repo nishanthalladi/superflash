@@ -1,4 +1,4 @@
-export const type = { name: 'tree', title: 'Tree' };
+export const type = { name: 'tree', title: 'Tree', lens: false };
 
 /**
  * The sidebar. Boring on purpose — a filesystem view is the one thing everybody

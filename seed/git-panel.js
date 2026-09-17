@@ -1,4 +1,4 @@
-export const type = { name: 'git-panel', title: 'Git' };
+export const type = { name: 'git-panel', title: 'Git', lens: false };
 
 /**
  * Git is not a Type — it is a verb over the whole repo, and it lives on the

@@ -17,7 +17,7 @@ function rehydrate(files: Record<string, string>): Doc {
   const doc = JSON.parse(files['doc.json']!) as Doc;
   for (const note of doc.notes) {
     const pointer = /^@([\w.-]+\.js)$/.exec(note.body.trim());
-    if (pointer) note.body = files[pointer[1]!]!;
+    if (pointer && files[pointer[1]!] !== undefined) note.body = files[pointer[1]!]!;
   }
   return doc;
 }
@@ -28,12 +28,12 @@ beforeEach(() => {
 });
 
 describe('eject', () => {
-  it('writes one file per module Note, plus the document', async () => {
+  it('writes the document, and leaves seed pointers pointing at disk', async () => {
     const { kernel } = await stage0(host(), memoryStore(), { fs: null });
     const files = eject(kernel);
 
-    expect(Object.keys(files).sort()).toEqual(['canvas.js', 'doc.json', 'git-panel.js', 'split.js', 'tree.js']);
-    expect(files['canvas.js']).toContain("name: 'canvas'");
+    // The shipped Types are not copied out: the document never held their source.
+    expect(Object.keys(files)).toEqual(['doc.json']);
     expect(JSON.parse(files['doc.json']!).notes.map((n: { body: string }) => n.body)).toContain('@canvas.js');
   });
 

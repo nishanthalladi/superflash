@@ -32,6 +32,38 @@ export function httpFs(base = ''): FsClient {
     read: (path) => json(`/_fs/read?path=${encodeURIComponent(path)}`) as ReturnType<FsClient['read']>,
     write: (path, body) => post('/_fs/write', { path, body }) as ReturnType<FsClient['write']>,
     git: (args) => post('/_git', { args }) as ReturnType<FsClient['git']>,
+    readDoc: () => json('/_doc') as ReturnType<FsClient['readDoc']>,
+    writeDoc: (body) => post('/_doc', { body }) as ReturnType<FsClient['writeDoc']>,
+    async ask(prompt, session, onText) {
+      const res = await fetch(`${base}/_ask`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt, session }),
+      });
+      if (!res.ok || !res.body) throw new Error(`${res.status} /_ask`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let done: { session: string; cost: number } | null = null;
+      const take = (line: string): void => {
+        if (!line.trim()) return;
+        const ev = JSON.parse(line) as { text?: string; done?: { session: string; cost: number }; error?: string };
+        if (ev.error) throw new Error(ev.error);
+        if (ev.text) onText(ev.text);
+        if (ev.done) done = ev.done;
+      };
+      for (;;) {
+        const { value, done: eof } = await reader.read();
+        if (eof) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n');
+        buf = parts.pop() ?? '';
+        for (const p of parts) take(p);
+      }
+      take(buf);
+      if (!done) throw new Error('claude gave no result');
+      return done;
+    },
   };
 }
 

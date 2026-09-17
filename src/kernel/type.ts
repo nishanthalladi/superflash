@@ -21,6 +21,14 @@ export interface FsClient {
   write(path: string, body: string): Promise<{ path: string; mtime: number }>;
   /** An argv array, never a string. */
   git(args: string[]): Promise<{ code: number; stdout: string; stderr: string }>;
+  /**
+   * One turn with Claude Code in the repo. `onText` gets the reply as it is
+   * written; the result comes when it is done. Pass `session` back to keep talking.
+   */
+  ask(prompt: string, session: string | undefined, onText: (text: string) => void): Promise<{ session: string; cost: number }>;
+  /** The live document on disk, so an agent in the repo sees what you see. */
+  readDoc(): Promise<{ body: string | null; mtime: number }>;
+  writeDoc(body: string): Promise<{ mtime: number }>;
 }
 
 /** What a Type looks like from the outside once it is registered. */
@@ -29,6 +37,8 @@ export interface TypeInfo {
   title: string;
   /** The Note this Type was compiled from, if it came from one. */
   source?: NoteId;
+  /** `false` for a tool that ignores its note: it is not a way of looking, so no picker lists it. */
+  lens?: boolean;
 }
 
 /**
@@ -93,7 +103,12 @@ export class Registry {
   private watchers = new Set<() => void>();
 
   define(name: string, factory: TypeFactory, info: Partial<TypeInfo> = {}): TypeInfo {
-    const full: TypeInfo = { name, title: info.title ?? name, ...(info.source ? { source: info.source } : {}) };
+    const full: TypeInfo = {
+      name,
+      title: info.title ?? name,
+      ...(info.source ? { source: info.source } : {}),
+      ...(info.lens === false ? { lens: false } : {}),
+    };
     this.types.set(name, { factory, info: full });
     for (const w of [...this.watchers]) w();
     return full;

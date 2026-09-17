@@ -1,5 +1,6 @@
 import type { Kernel } from './kernel/kernel';
 import { POLICY } from './stage0';
+import { pointer } from './seed';
 
 /**
  * The way out. Turns the live document back into the `seed/` files it came from,
@@ -24,7 +25,8 @@ export function eject(kernel: Kernel): Record<string, string> {
 
   for (const note of doc.notes) {
     const name = byNote.get(note.id);
-    if (!name) continue;
+    // A pointer already lives on disk; only a Type written inside the app needs a file.
+    if (!name || pointer(note.body) !== null) continue;
     const file = `${name}.js`;
     files[file] = note.body;
     note.body = `@${file}`;

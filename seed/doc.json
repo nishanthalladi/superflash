@@ -3,18 +3,20 @@
   "root": "note_1_root",
   "focus": null,
   "grants": [],
-  "modules": ["note_10_canvas", "note_11_tree", "note_12_git", "note_13_split"],
+  "modules": ["note_10_canvas", "note_11_tree", "note_12_git", "note_13_split", "note_14_text", "note_15_chat"],
   "notes": [
     { "id": "note_1_root", "body": "root" },
     { "id": "note_2_canvas", "body": "Superflash" },
-    { "id": "note_3_hello", "body": "Instructions\nDouble-click empty space for a box.\nDouble-click a box's title bar to go inside it. Drag the dotted handle to move it.\nEscape comes back out.\n\nThe first line of a box is its name.\nCmd+N puts a box on a note that is still only text.\nShift+Enter runs a box." },
+    { "id": "note_3_hello", "body": "Instructions\nDouble-click empty space for a box. Just start typing for text.\nDouble-click a box's title bar to go inside it. Drag the dotted handle to move it.\nEscape comes back out.\n\nThe first line of a box is its name. Right-click its bar to change how it is drawn; right-click the big title bar to change how the note you are inside is shown.\nShift+Enter runs a text box." },
     { "id": "note_10_canvas", "body": "@canvas.js" },
     { "id": "note_11_tree", "body": "@tree.js" },
     { "id": "note_12_git", "body": "@git-panel.js" },
-    { "id": "note_13_split", "body": "@split.js" }
+    { "id": "note_13_split", "body": "@split.js" },
+    { "id": "note_14_text", "body": "@text.js" },
+    { "id": "note_15_chat", "body": "@chat.js" }
   ],
   "pins": [
     { "id": "pin_1_root", "note": "note_2_canvas", "parent": "note_1_root", "type": "canvas", "x": 0, "y": 0, "width": 0, "height": 0 },
-    { "id": "pin_2_hello", "note": "note_3_hello", "parent": "note_2_canvas", "type": "canvas", "x": 96, "y": 96, "width": 380, "height": 160 }
+    { "id": "pin_2_hello", "note": "note_3_hello", "parent": "note_2_canvas", "type": "text", "x": 96, "y": 96, "width": 380, "height": 200 }
   ]
 }

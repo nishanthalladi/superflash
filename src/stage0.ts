@@ -1,4 +1,5 @@
 import { Kernel } from './kernel/kernel';
+import type { Doc } from './kernel/kernel';
 import { CREATE, DEFINE, FS, MACHINE, SHELL, TYPES } from './kernel/grants';
 import type { Grant } from './kernel/grants';
 import type { Pin, PinId } from './kernel/model';
@@ -8,8 +9,11 @@ import { code } from './types/code';
 import type { FsClient } from './kernel/type';
 import { httpFs, reachable, sync } from './files';
 import type { Sync } from './files';
-import { seedDoc } from './seed';
+import { FILES, pointer, resolve, seedDoc } from './seed';
+import { loadSource } from './kernel/modules';
 import { safeShell } from './safe';
+import { syncDoc } from './docfile';
+import type { DocSync } from './docfile';
 
 /**
  * Grant policy: which powers a pin gets purely from its Type.
@@ -22,6 +26,9 @@ export const POLICY: Record<string, Grant[]> = {
   // One Type does everything a canvas does, at every depth — so it holds
   // everything a canvas needs, including running what you type in it.
   canvas: [SHELL, FS, DEFINE, CREATE, TYPES, MACHINE],
+  // A text box runs what you type in it, so it holds the same.
+  text: [SHELL, FS, DEFINE, CREATE, TYPES, MACHINE],
+  chat: [FS],
   split: [SHELL],
   code: [DEFINE],
   tree: [FS],
@@ -35,7 +42,7 @@ export function applyPolicy(kernel: Kernel, pin: Pin): void {
 
 /** The only Type in `src/`: a file editor. Enough to repair a broken canvas. */
 export function registerBuiltins(kernel: Kernel): void {
-  kernel.types.define('code', code, { title: 'Code' });
+  kernel.types.define('code', code, { title: 'Code', lens: false });
 }
 
 export interface Booted {
@@ -45,6 +52,8 @@ export interface Booted {
   shell: PinId | null;
   /** The repo mirror, when there is a bridge. */
   files: Sync | null;
+  /** The document on disk, when there is a bridge. */
+  doc: DocSync | null;
 }
 
 export interface Stage0Options {
@@ -66,23 +75,59 @@ export interface Stage0Options {
  */
 export async function stage0(root: HTMLElement, store: Store, options: Stage0Options = {}): Promise<Booted> {
   const kernel = new Kernel();
+  kernel.loader = (source) => loadSource(resolve(source));
   registerBuiltins(kernel);
 
   const stored = options.fresh ? null : readDoc(store);
   if (stored) snapshot(store, stored);
   kernel.load(stored ?? seedDoc());
 
+  // Disk wins for the document too: if the repo has one, it is what you see.
+  const client = options.fs === undefined ? httpFs() : options.fs;
+  const bridged = client !== null && (await reachable(client));
+  if (bridged && !options.fresh) {
+    const onDisk = await client!.readDoc().catch(() => ({ body: null }));
+    if (onDisk.body) {
+      try {
+        const doc = JSON.parse(onDisk.body) as Doc;
+        if (doc.version === 3) kernel.load(doc);
+      } catch (err) {
+        console.warn('document on disk did not parse; using the stored one', err);
+      }
+    }
+  }
+
   const failed = options.safe ? [] : (await kernel.loadModules()).failed;
   for (const f of failed) console.warn('module failed to load', f.note, f.error);
+
+  // Disk wins, for Types too. A stored document that carries its own copy of a
+  // seed Type (every document before v4 did) is pointed back at the file, so an
+  // edit to `seed/*.js` reaches it on reload instead of needing `?fresh=1`.
+  if (!options.safe) {
+    // A seed Type the stored document has never heard of is added to it.
+    const known = new Set(kernel.types.list().map((t) => `${t.name}.js`));
+    for (const file of Object.keys(FILES)) {
+      if (known.has(file)) continue;
+      const note = kernel.createNote(`@${file}`);
+      await kernel.defineModule(note.id).catch((err) => console.warn('seed module failed', file, err));
+    }
+    for (const t of kernel.types.list()) {
+      if (!t.source || !(`${t.name}.js` in FILES) || pointer(kernel.body(t.source)) !== null) continue;
+      kernel.patch(t.source, `@${t.name}.js`);
+      await kernel.defineModule(t.source);
+    }
+    kernel.journal.clear();
+  }
 
   // The repo, as Notes, before anything renders — the tree has nothing to show
   // otherwise. No bridge (any production build) means no file Notes, and the app
   // is just the seed.
-  const client = options.fs === undefined ? httpFs() : options.fs;
   let files: Sync | null = null;
-  if (client && (await reachable(client))) {
+  let doc: DocSync | null = null;
+  if (bridged) {
     kernel.fs = client;
-    files = await sync(kernel, client);
+    files = await sync(kernel, client!);
+    doc = syncDoc(kernel, client!);
   }
 
   for (const pin of kernel.allPins()) applyPolicy(kernel, pin);
@@ -95,13 +140,13 @@ export async function stage0(root: HTMLElement, store: Store, options: Stage0Opt
 
   if (options.safe || !shell) {
     safeShell(kernel, root, options.safe ? 'asked for' : 'the root Note has no single shell pin');
-    return { kernel, save, shell: null, files };
+    return { kernel, save, shell: null, files, doc };
   }
 
   let factory = kernel.types.has(shell.type) ? kernel.types.get(shell.type) : null;
   if (!factory || !mount(kernel, root, shell.id)) {
     safeShell(kernel, root, `${shell.type} did not mount`);
-    return { kernel, save, shell: null, files };
+    return { kernel, save, shell: null, files, doc };
   }
 
   // Editing the shell from inside the shell: when its Type is redefined, tear the
@@ -116,7 +161,7 @@ export async function stage0(root: HTMLElement, store: Store, options: Stage0Opt
     if (!mount(kernel, root, shell.id)) safeShell(kernel, root, `${shell.type} did not mount`);
   });
 
-  return { kernel, save, shell: shell.id, files };
+  return { kernel, save, shell: shell.id, files, doc };
 }
 
 /** Rule 6: the root Note has exactly one pin, and that pin is the app. */

@@ -9,7 +9,7 @@ import { startMachine } from './machine';
 import type { Machine } from './machine';
 import { Journal } from './journal';
 import type { Op, Undoable } from './journal';
-import { defineModule } from './modules';
+import { defineModule, loadSource } from './modules';
 import type { Loader } from './modules';
 
 export type Change =
@@ -66,6 +66,8 @@ export class Kernel implements Undoable {
    * kernel only holds it so `host.fs()` can hand it out behind a grant.
    */
   fs: FsClient | null = null;
+  /** How module source becomes a live module. `stage0` swaps in one that follows seed pointers. */
+  loader: Loader = loadSource;
 
   private notes = new Map<NoteId, Note>();
   private pins = new Map<PinId, Pin>();
@@ -247,7 +249,7 @@ export class Kernel implements Undoable {
    * Note stays marked as a module, so you can fix it and run it again.
    */
   async defineModule(note: NoteId, load?: Loader): Promise<TypeInfo> {
-    const info = await defineModule({ body: (n) => this.body(n), types: this.types }, note, load);
+    const info = await defineModule({ body: (n) => this.body(n), types: this.types }, note, load ?? this.loader);
     this.modules.add(note);
     this.announce({ kind: 'doc', note });
     return info;

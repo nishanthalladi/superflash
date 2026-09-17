@@ -10,6 +10,7 @@ stage0(app, localStorage, { fresh: flags.has('fresh'), safe: flags.has('safe') }
   const flush = (): void => {
     booted.save.flush();
     void booted.files?.flush();
+    void booted.doc?.flush();
   };
   addEventListener('pagehide', flush);
   addEventListener('beforeunload', flush);

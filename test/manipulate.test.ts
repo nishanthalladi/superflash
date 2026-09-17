@@ -107,7 +107,7 @@ describe('create and delete', () => {
     root.querySelector<HTMLElement>('.canvas-viewport > .canvas-layer > .pin')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
     expect(k.focus()).toBe(pins[0]!.id);
 
-    const field = root.querySelector<HTMLTextAreaElement>('.canvas-text')!;
+    const field = root.querySelector<HTMLInputElement>('.canvas-name')!;
     field.focus();
     key('Backspace');
     expect(k.childPins(desk.id)).toHaveLength(2);

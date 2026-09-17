@@ -117,7 +117,7 @@ describe('a box is a canvas too', () => {
     kernel.patch(hello.note, 'INSTRUCTIONS\ndouble-click empty space.');
     expect(root.querySelector<HTMLInputElement>('.pin .canvas-name')!.value).toBe('INSTRUCTIONS');
     // Not twice: the box shows what is left after the name.
-    expect(root.querySelector<HTMLTextAreaElement>('.pin .canvas-text')!.value).toBe('double-click empty space.');
+    expect(root.querySelector<HTMLTextAreaElement>('.pin .text-body')!.value).toBe('double-click empty space.');
   });
 
   it('renames from the title bar without touching the rest', async () => {
@@ -138,7 +138,7 @@ describe('a box is a canvas too', () => {
     const { kernel } = await stage0(root, memoryStore(), { fs: null });
     const hello = kernel.childPins(canvasNote(kernel))[0]!;
 
-    root.querySelector<HTMLTextAreaElement>('.pin .canvas-text')!.focus();
+    root.querySelector<HTMLTextAreaElement>('.pin .text-body')!.focus();
     kernel.setFocus(hello.id);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true }));
 
@@ -147,22 +147,22 @@ describe('a box is a canvas too', () => {
 
   it('shows what a box holds without going inside it', async () => {
     const root = host();
-    const { kernel } = await stage0(root, memoryStore(), { fs: null });
+    const { kernel, shell } = await stage0(root, memoryStore(), { fs: null });
     const hello = kernel.childPins(canvasNote(kernel))[0]!;
+    const view = kernel.instance(shell!) as unknown as { retype(pin: string, type: string): string };
+
+    // The instructions ship as text; looked at as a canvas, they are an empty one.
+    const id = view.retype(hello.id, 'canvas');
     const box = () => root.querySelector<HTMLElement>('.canvas-viewport > .canvas-layer > .pin')!;
-
     expect(box().querySelectorAll('.canvas-inside .pin')).toHaveLength(0);
-    const text = kernel.body(hello.note);
-    kernel.pin(kernel.createNote('a thought').id, hello.note, 'canvas');
 
-    // Text or boxes, never both: the note's text moved into a box of its own, so
-    // the box now holds two, and it shows them.
-    const inside = box().querySelectorAll<HTMLElement>('.canvas-inside .pin');
-    expect(inside).toHaveLength(2);
-    expect(kernel.body(hello.note)).toBe('Instructions');
-    expect(kernel.childPins(hello.note).map((p) => kernel.body(p.note))).toContain(
-      text.split('\n').slice(1).join('\n'),
-    );
+    const text = kernel.body(hello.note);
+    kernel.pin(kernel.createNote('a thought').id, hello.note, 'text');
+
+    // The body is not moved anywhere: a canvas is boxes, and its text is still its text.
+    expect(box().querySelectorAll('.canvas-inside .pin')).toHaveLength(1);
+    expect(kernel.body(hello.note)).toBe(text);
+    expect(kernel.getPin(id).type).toBe('canvas');
   });
 });
 
@@ -192,7 +192,7 @@ describe('editing the app from inside the app', () => {
     const root = host();
     const { kernel } = await stage0(root, memoryStore(), { fs: fakeFs({ 'src/a.ts': 'a' }).fs });
     const hello = kernel.childPins(canvasNote(kernel))[0]!;
-    const el = root.querySelector<HTMLElement>('.pin[data-type="canvas"]')!;
+    const el = root.querySelector<HTMLElement>('.pin[data-type="text"]')!;
 
     // A box that is code names itself with a comment; the name still runs.
     kernel.patch(
@@ -207,7 +207,7 @@ describe('editing the app from inside the app', () => {
     const root = host();
     const { kernel } = await stage0(root, memoryStore(), { fs: null });
     const hello = kernel.childPins(canvasNote(kernel))[0]!;
-    const el = root.querySelector<HTMLElement>('.pin[data-type="canvas"]')!;
+    const el = root.querySelector<HTMLElement>('.pin[data-type="text"]')!;
 
     kernel.patch(
       hello.note,
@@ -230,7 +230,7 @@ describe('editing the app from inside the app', () => {
 });
 
 describe('the safe shell', () => {
-  it('takes over when the canvas will not compile', async () => {
+  it('a broken copy of the canvas in the document loses to the one on disk', async () => {
     const store = memoryStore();
     const first = await stage0(host(), store, { fs: null });
     first.kernel.patch(moduleNote(first.kernel, 'canvas'), 'export default function ( {');
@@ -240,10 +240,10 @@ describe('the safe shell', () => {
     const root = host();
     const second = await stage0(root, store, { fs: null });
 
-    expect(second.shell).toBeNull();
-    expect(second.kernel.types.has('canvas')).toBe(false);
-    expect(root.querySelector('.safe')).not.toBeNull();
-    expect(root.querySelectorAll('.safe-note textarea').length).toBe(second.kernel.modules.size);
+    // Only a broken `seed/canvas.js` on disk reaches the safe shell now.
+    expect(second.shell).not.toBeNull();
+    expect(second.kernel.types.has('canvas')).toBe(true);
+    expect(root.querySelector('.canvas-viewport')).not.toBeNull();
   });
 
   it('?safe skips modules entirely', async () => {
@@ -256,6 +256,37 @@ describe('the safe shell', () => {
 });
 
 describe('reload', () => {
+  it('a document carrying an old copy of a seed Type gets the one on disk', async () => {
+    const store = memoryStore();
+    const first = await stage0(host(), store, { fs: null });
+    const note = moduleNote(first.kernel, 'text');
+    first.kernel.patch(note, `export const type = { name: 'text' };
+      export default () => ({ mount(box) { box.textContent = 'STALE'; } });`);
+    await first.kernel.defineModule(note);
+    first.save.flush();
+    first.save.stop();
+
+    const root = host();
+    const second = await stage0(root, store, { fs: null });
+    expect(second.kernel.body(note)).toBe('@text.js');
+    expect(root.textContent).not.toContain('STALE');
+    expect(root.querySelector('.text-body')).not.toBeNull();
+  });
+
+  it('a document from before a seed Type existed gains it on boot', async () => {
+    const store = memoryStore();
+    const first = await stage0(host(), store, { fs: null });
+    const doc = first.kernel.toJSON();
+    const text = moduleNote(first.kernel, 'text');
+    doc.modules = doc.modules.filter((m) => m !== text);
+    doc.notes = doc.notes.filter((n) => n.id !== text);
+    doc.pins = doc.pins.filter((p) => p.note !== text);
+    store.setItem('superflash:doc:v3', JSON.stringify(doc));
+
+    const second = await stage0(host(), store, { fs: null });
+    expect(second.kernel.types.has('text')).toBe(true);
+  });
+
   it('brings the document back', async () => {
     const store = memoryStore();
     const first = await stage0(host(), store, { fs: null });

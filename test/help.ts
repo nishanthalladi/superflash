@@ -8,6 +8,8 @@ import canvasJs from '../seed/canvas.js?raw';
 import treeJs from '../seed/tree.js?raw';
 import gitPanelJs from '../seed/git-panel.js?raw';
 import splitJs from '../seed/split.js?raw';
+import textJs from '../seed/text.js?raw';
+import chatJs from '../seed/chat.js?raw';
 
 /**
  * The canvas and the tools are seed Notes, so tests compile them the same way the
@@ -21,6 +23,8 @@ export const canvas = await factory(canvasJs);
 export const tree = await factory(treeJs);
 export const gitPanel = await factory(gitPanelJs);
 export const split = await factory(splitJs);
+export const text = await factory(textJs);
+export const chat = await factory(chatJs);
 
 /** A Type with no powers and no chrome, for tests that only need something drawn. */
 export const plain: TypeFactory = (host) => {
@@ -51,6 +55,9 @@ export function fakeFs(seed: Record<string, string> = {}) {
   const mtimes = new Map([...files.keys()].map((p) => [p, 1]));
   const writes: string[] = [];
   const ran: string[][] = [];
+  const asked: { prompt: string; session?: string }[] = [];
+  let docFile: string | null = null;
+  let docMtime = 0;
   let clock = 1;
 
   const fs: FsClient = {
@@ -74,6 +81,19 @@ export function fakeFs(seed: Record<string, string> = {}) {
       if (args[0] === 'rev-parse') return { code: 0, stdout: 'main\n', stderr: '' };
       return { code: 0, stdout: args.join(' '), stderr: '' };
     },
+    async readDoc() {
+      return { body: docFile, mtime: docMtime };
+    },
+    async writeDoc(body) {
+      docFile = body;
+      docMtime += 1;
+      return { mtime: docMtime };
+    },
+    async ask(prompt, session, onText) {
+      asked.push({ prompt, session });
+      for (const piece of ['echo: ', prompt]) onText(piece);
+      return { session: session ?? 'sess-1', cost: 0.01 };
+    },
   };
 
   /** Somebody edited the file outside the app. */
@@ -83,7 +103,13 @@ export function fakeFs(seed: Record<string, string> = {}) {
     mtimes.set(path, clock);
   };
 
-  return { fs, files, outside, writes, ran };
+  /** Somebody (an agent) edited the document on disk. */
+  const outsideDoc = (body: string): void => {
+    docFile = body;
+    docMtime += 1;
+  };
+
+  return { fs, files, outside, outsideDoc, doc: () => docFile, writes, ran, asked };
 }
 
 /**
@@ -100,15 +126,21 @@ export async function until(what: () => boolean, tries = 100): Promise<void> {
 
 /** Run a box (Shift+Enter) and wait for it to settle. Returns the output text. */
 export async function runBox(el: ParentNode): Promise<string> {
-  const text = el.querySelector<HTMLTextAreaElement>('.canvas-text')!;
-  const out = el.querySelector<HTMLElement>('.canvas-out')!;
+  const text = el.querySelector<HTMLTextAreaElement>('.text-body')!;
+  const out = el.querySelector<HTMLElement>('.text-out')!;
   text.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true }));
   await until(() => out.textContent !== '…');
   return out.textContent ?? '';
 }
 
 export interface Mounted {
-  instance: TypeInstance & { noteId: NoteId; enter(note: NoteId): void; leave(): void };
+  instance: TypeInstance & {
+    noteId: NoteId;
+    viewAs: string;
+    enter(note: NoteId): void;
+    leave(): void;
+    setView(type: string): void;
+  };
   pin: PinId;
 }
 
@@ -124,11 +156,12 @@ export function mountCanvas(kernel: Kernel, root: HTMLElement, note: NoteId): Mo
     // no store, no camera
   }
   if (!kernel.types.has('canvas')) kernel.types.define('canvas', canvas, { title: 'Canvas' });
+  if (!kernel.types.has('text')) kernel.types.define('text', text, { title: 'Text' });
   // Every canvas gets the same powers, at every depth — as the policy does.
   const powers = (id: PinId): void => kernel.grants.give(id, SHELL, CREATE, TYPES);
-  for (const p of kernel.allPins()) if (p.type === 'canvas') powers(p.id);
+  for (const p of kernel.allPins()) if (p.type === 'canvas' || p.type === 'text') powers(p.id);
   kernel.watch((c) => {
-    if (c.kind === 'pin:add' && kernel.hasPin(c.pin) && kernel.getPin(c.pin).type === 'canvas') powers(c.pin);
+    if (c.kind === 'pin:add' && kernel.hasPin(c.pin) && ['canvas', 'text'].includes(kernel.getPin(c.pin).type)) powers(c.pin);
   });
   const shell = kernel.createNote('root');
   kernel.root = shell.id;

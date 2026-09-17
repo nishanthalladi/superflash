@@ -86,5 +86,6 @@ export async function defineModule(
   return target.types.define(name, factory as TypeFactory, {
     title: typeof manifest.title === 'string' ? manifest.title : name,
     source: note,
+    ...(manifest.lens === false ? { lens: false } : {}),
   });
 }

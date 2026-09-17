@@ -1,11 +1,32 @@
 :root {
-  color-scheme: dark;
-  --ink: #e8e8ea;
-  --dim: #8a8a93;
-  --edge: #2a2a30;
-  --bg: #101013;
-  --bad: #ff8a7a;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color-scheme: light;
+  /* brand/palette.md: gold is the bolt, tan the field, brown the ink, cream the page. */
+  --gold: #fcdf20;
+  --tan: #e0c9a6;
+  --brown: #c0996b;
+  --cream: #f7f2ec;
+
+  --bg: var(--cream);
+  --paper: #fffdf9;
+  --paper-2: #f3ece2;
+  --ink: #3b2f22;
+  --ink-2: #6b5a46;
+  --dim: #a08a6e;
+  --edge: #e6dccb;
+  --edge-2: #d6c7ae;
+  --bad: #b3432b;
+  --ok: #4f7a4a;
+  --focus: var(--gold);
+  --shadow: 0 1px 1px rgba(59, 47, 34, 0.05), 0 6px 18px -12px rgba(59, 47, 34, 0.22);
+
+  --prose: 'Newsreader', 'Iowan Old Style', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--prose);
+  font-size: 15px;
+}
+
+::selection {
+  background: #fcdf2066;
 }
 
 * {
@@ -42,49 +63,50 @@ body {
 /* The name of the note you are inside: the first line of its body, centred. */
 .canvas-head {
   flex: 0 0 auto;
-  height: 52px;
-  line-height: 52px;
+  height: 44px;
+  line-height: 44px;
   border: 0;
   border-bottom: 1px solid var(--edge);
   padding: 0 16px;
-  background: #131317;
+  background: var(--paper);
   color: var(--ink);
   font: inherit;
-  font-size: 20px;
+  font-size: 19px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   text-align: center;
 }
 
 .canvas-head:focus {
   outline: none;
-  background: #16161b;
+  background: var(--paper-2);
 }
 
 .canvas-head::placeholder {
-  color: #3f3f49;
+  color: var(--dim);
 }
 
-/* The outermost canvas shows its own text too — same parts, more room. */
-/* A note with no boxes in it *is* its text: full screen, not a strip. Cmd+N puts
-   the first box on it, which moves the text into a box of its own. */
-.canvas:not(.holds) > .canvas-viewport {
-  display: none;
-}
-
-.canvas:not(.holds) > .canvas-text {
+.canvas-stage {
+  position: relative;
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 12px 16px;
-  background: var(--bg);
-  font-size: 13px;
+  display: flex;
+  flex-direction: column;
 }
 
-/* No `:empty` here: a textarea whose value came from JS has no child nodes, so
-   `:empty` is always true and the text disappeared. A box that holds boxes has no
-   text left to show — it was moved into the first one. */
-.canvas.holds > .canvas-text,
-.canvas-nest.holds > .canvas-text {
-  display: none;
+/* The note you are inside, shown as some Type other than a canvas. */
+.canvas-full {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.canvas-full.broken {
+  padding: 8px;
+  color: var(--bad);
+  font-size: 11px;
 }
 
 .canvas-viewport {
@@ -92,7 +114,8 @@ body {
   flex: 1;
   overflow: hidden;
   touch-action: none;
-  background-image: radial-gradient(circle, #1e1e24 1px, transparent 1px);
+  /* The dots move with the camera (see `paint` in canvas.js): paper, not glass. */
+  background-image: radial-gradient(circle, var(--edge-2) 0.8px, transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -153,7 +176,7 @@ body {
 }
 
 .split-bar:hover {
-  background: #3d4a63;
+  background: var(--tan);
 }
 
 /* --- pins ---------------------------------------------------------------- */
@@ -162,15 +185,21 @@ body {
   position: absolute;
   display: flex;
   flex-direction: column;
-  border: 1px solid #2f2f38;
-  border-radius: 6px;
-  background: #16161b;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
   overflow: hidden;
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.pin:hover {
+  border-color: var(--edge-2);
 }
 
 .pin.focused {
-  border-color: #5a7bb8;
-  outline: 1px solid #5a7bb8;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px #fcdf2055, var(--shadow);
 }
 
 .pin.broken {
@@ -207,9 +236,9 @@ body {
   flex: none;
   display: flex;
   align-items: stretch;
-  height: 30px;
-  border-bottom: 1px solid #2a2a30;
-  background: #1c1c22;
+  height: 32px;
+  border-bottom: 1px solid var(--edge);
+  background: var(--paper);
   cursor: grab;
 }
 
@@ -217,11 +246,19 @@ body {
   flex: 1;
   min-width: 0;
   border: 0;
-  padding: 0 9px;
+  padding: 0 10px;
   background: transparent;
   color: var(--ink);
   font: inherit;
   font-size: 15px;
+  font-weight: 500;
+}
+
+.canvas-name:disabled {
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .canvas-name:focus {
@@ -229,7 +266,42 @@ body {
 }
 
 .canvas-name::placeholder {
-  color: #45454f;
+  color: var(--dim);
+  font-style: italic;
+}
+
+/* Right-click on a bar: which Type draws this. Small, at the pointer, gone on a click. */
+.canvas-menu {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  padding: 4px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.canvas-menu button {
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 10px;
+  text-align: left;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.canvas-menu button:hover {
+  background: var(--paper-2);
+}
+
+.canvas-menu button.chosen {
+  color: var(--dim);
 }
 
 /* The handle: drag from here, since the name beside it takes a caret. */
@@ -237,69 +309,70 @@ body {
   flex: 0 0 26px;
   cursor: grab;
   user-select: none;
-  background: radial-gradient(circle, #3a3a44 1px, transparent 1.2px);
+  background: radial-gradient(circle, var(--edge-2) 1px, transparent 1.2px);
   background-size: 5px 5px;
 }
 
-.canvas-text {
-  flex: 0 1 auto;
-  min-height: 1.6em;
+.text {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.text-body {
+  flex: 1;
+  min-height: 0;
   resize: none;
   border: 0;
-  padding: 7px 9px;
+  padding: 10px 12px;
   background: transparent;
   color: var(--ink);
   font: inherit;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.55;
   tab-size: 2;
 }
 
-.canvas-text:focus {
+.text-body:focus {
   outline: none;
 }
 
-.canvas-text::placeholder {
-  color: #4a4a55;
+.text-body::placeholder {
+  color: var(--dim);
+  font-style: italic;
 }
 
-/* What this canvas holds, drawn to scale — the picture of what is inside. */
+/* A canvas inside a canvas: a live world with its own camera and its own paper. */
 .canvas-inside {
   position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  /* A preview, not a control: you reach these by going inside. */
-  pointer-events: none;
-  /* Nothing inside: the text gets the room instead. */
-  display: none;
+  touch-action: none;
+  background-image: radial-gradient(circle, var(--edge-2) 0.8px, transparent 1px);
+  background-size: 24px 24px;
 }
 
-.canvas-nest.holds > .canvas-inside {
-  display: block;
-}
-
-.canvas-nest:not(.holds) > .canvas-text {
-  flex: 1;
-}
-
-.canvas-out {
+.text-out {
   flex: 0 0 auto;
   max-height: 50%;
   overflow: auto;
   padding: 6px 9px;
   border-top: 1px solid var(--edge);
-  color: #b9f0cf;
+  background: var(--paper-2);
+  color: var(--ok);
+  font-family: var(--mono);
   font-size: 11px;
   line-height: 1.45;
   white-space: pre-wrap;
 }
 
-.canvas-out.bad {
+.text-out.bad {
   color: var(--bad);
 }
 
-.canvas-out:empty {
+.text-out:empty {
   display: none;
 }
 
@@ -310,7 +383,8 @@ body {
   width: 14px;
   height: 14px;
   cursor: nwse-resize;
-  background: linear-gradient(135deg, transparent 50%, #33333d 50%);
+  background: linear-gradient(135deg, transparent 50%, var(--edge-2) 50%);
+  border-bottom-right-radius: 9px;
 }
 
 /* --- code ---------------------------------------------------------------- */
@@ -322,10 +396,11 @@ body {
   border: 0;
   border-radius: 4px;
   padding: 8px;
-  background: #00000055;
-  color: #d7e4ff;
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 11.5px;
   line-height: 1.5;
   tab-size: 2;
 }
@@ -335,6 +410,7 @@ body {
 }
 
 .code-tools {
+  font-family: var(--mono);
   display: flex;
   gap: 8px;
   align-items: center;
@@ -342,8 +418,8 @@ body {
 }
 
 .code-tools button {
-  background: #23324a;
-  border: 1px solid #35507a;
+  background: var(--paper);
+  border: 1px solid var(--edge-2);
   border-radius: 4px;
   color: var(--ink);
   font: inherit;
@@ -397,9 +473,10 @@ body {
   border: 1px solid var(--edge);
   border-radius: 4px;
   padding: 8px;
-  background: #00000055;
-  color: #d7e4ff;
+  background: var(--paper);
+  color: var(--ink);
   font: inherit;
+  font-family: var(--mono);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -412,8 +489,8 @@ body {
 }
 
 .safe-tools button {
-  background: #23324a;
-  border: 1px solid #35507a;
+  background: var(--paper);
+  border: 1px solid var(--edge-2);
   border-radius: 4px;
   color: var(--ink);
   font: inherit;
@@ -429,7 +506,8 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #16161b;
+  background: var(--paper);
+  font-family: var(--mono);
 }
 
 .tree-head {
@@ -442,7 +520,7 @@ body {
 }
 
 .tree-head button {
-  background: #00000040;
+  background: var(--paper);
   border: 1px solid var(--edge);
   border-radius: 4px;
   color: var(--ink);
@@ -482,18 +560,19 @@ body {
 }
 
 .tree-dir {
-  color: #b8c8e8;
+  color: var(--ink-2);
 }
 
 .tree-file:hover,
 .tree-dir:hover {
-  background: #ffffff10;
+  background: var(--paper-2);
 }
 
 /* --- git ----------------------------------------------------------------- */
 
 .git {
   gap: 6px;
+  font-family: var(--mono);
 }
 
 .git-head {
@@ -505,7 +584,7 @@ body {
 }
 
 .git-head button {
-  background: #00000040;
+  background: var(--paper);
   border: 1px solid var(--edge);
   border-radius: 4px;
   color: var(--ink);
@@ -545,7 +624,7 @@ body {
 }
 
 .git-file.armed {
-  background: #ffffff14;
+  background: var(--paper-2);
 }
 
 .git-diff {
@@ -556,8 +635,9 @@ body {
   padding: 6px;
   border: 1px solid var(--edge);
   border-radius: 4px;
-  background: #00000055;
-  color: var(--dim);
+  background: var(--paper);
+  color: var(--ink-2);
+  font-family: var(--mono);
   font-size: 10px;
   white-space: pre;
 }
@@ -571,7 +651,7 @@ body {
 .git-message {
   flex: 1;
   min-width: 0;
-  background: #00000040;
+  background: var(--paper);
   border: 1px solid var(--edge);
   border-radius: 4px;
   color: var(--ink);
@@ -581,12 +661,69 @@ body {
 }
 
 .git-foot button {
-  background: #23324a;
-  border: 1px solid #35507a;
+  background: var(--paper);
+  border: 1px solid var(--edge-2);
   border-radius: 4px;
   color: var(--ink);
   font: inherit;
   font-size: 11px;
   padding: 3px 10px;
   cursor: pointer;
+}
+
+/* --- chat: the door --------------------------------------------------------- */
+
+.chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-log {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.chat-foot {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--edge);
+}
+
+.chat-input {
+  flex: 1;
+  resize: none;
+  border: 0;
+  padding: 6px 8px;
+  background: var(--paper-2);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+}
+
+.chat-input::placeholder {
+  color: var(--dim);
+  font-style: italic;
+}
+
+.chat-input:focus {
+  outline: none;
+}
+
+.chat-status {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
 }

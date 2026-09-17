@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { IncomingMessage } from 'node:http';
@@ -14,7 +14,9 @@ import type { Plugin } from 'vite';
  */
 
 /** Never listed, never read, never written. */
-export const DENY = new Set(['.git', 'node_modules', 'dist', '.DS_Store', '.vite']);
+export const DENY = new Set(['.git', 'node_modules', 'dist', '.DS_Store', '.vite', '.superflash']);
+/** Where the live document lives on disk, so an agent in the repo can read and write it. */
+export const DOC_PATH = '.superflash/doc.json';
 /** Files we would only garble by treating them as text. */
 export const BINARY = /\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|woff2?|ttf|otf|mp[34]|mov|wasm)$/i;
 export const MAX_BYTES = 512 * 1024;
@@ -142,6 +144,110 @@ export async function git(root: string, args: unknown): Promise<GitResult> {
   });
 }
 
+export interface AskEvent {
+  /** A piece of the reply as it is written. */
+  text?: string;
+  /** Sent once, at the end. */
+  done?: { session: string; cost: number };
+  error?: string;
+}
+
+/**
+ * Ask Claude Code, in the repo, with the tools it already has. One turn; pass the
+ * `session` back to continue the same conversation. Events arrive as they happen,
+ * one JSON object per line. The door the app works through — nothing here that a
+ * terminal could not do, which is the point.
+ *
+ * ponytail: `--dangerously-skip-permissions`, because there is no one at a
+ * terminal to answer a prompt. Same trust as the rest of the bridge: dev only,
+ * same origin, your machine. `--strict-mcp-config` keeps the boot bare: the
+ * repo's inherited MCP servers cost ~70k tokens a turn and nothing here needs
+ * them yet. Add `--mcp-config` from the note when a chat wants one.
+ */
+export function ask(root: string, prompt: unknown, session: unknown, emit: (e: AskEvent) => void): Promise<void> {
+  if (typeof prompt !== 'string' || !prompt.trim()) throw new Refused('prompt must be a non-empty string');
+  if (session !== undefined && !/^[\w-]+$/.test(String(session))) throw new Refused('bad session id');
+  const argv = [
+    '-p',
+    prompt,
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    '--include-partial-messages',
+    '--strict-mcp-config',
+    '--dangerously-skip-permissions',
+  ];
+  if (session) argv.push('--resume', String(session));
+  return new Promise((resolve) => {
+    // stdin closed: `claude -p` waits ~4s for an open pipe to end before it starts.
+    const child = spawn('claude', argv, { cwd: root, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    let buf = '';
+    let sid = String(session ?? '');
+    let cost = 0;
+    let failed = '';
+    const line = (raw: string): void => {
+      if (!raw.trim()) return;
+      let ev: Record<string, unknown>;
+      try {
+        ev = JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        return;
+      }
+      if (typeof ev['session_id'] === 'string') sid = ev['session_id'];
+      if (ev['type'] === 'stream_event') {
+        const inner = (ev['event'] as { type?: string; delta?: { type?: string; text?: string } }) ?? {};
+        if (inner.type === 'content_block_delta' && inner.delta?.type === 'text_delta' && inner.delta.text) {
+          emit({ text: inner.delta.text });
+        }
+      }
+      if (ev['type'] === 'result') {
+        cost = typeof ev['total_cost_usd'] === 'number' ? ev['total_cost_usd'] : 0;
+        if (ev['is_error']) failed = String(ev['result'] ?? 'claude failed');
+      }
+    };
+    child.stdout.on('data', (chunk: Buffer) => {
+      buf += chunk.toString();
+      const parts = buf.split('\n');
+      buf = parts.pop() ?? '';
+      for (const p of parts) line(p);
+    });
+    let stderr = '';
+    child.stderr.on('data', (c: Buffer) => {
+      stderr += c.toString();
+    });
+    child.on('error', (err) => {
+      emit({ error: err.message });
+      resolve();
+    });
+    child.on('close', (code) => {
+      line(buf);
+      if (failed || code) emit({ error: failed || stderr.trim() || `claude exited ${code}` });
+      else emit({ done: { session: sid, cost } });
+      resolve();
+    });
+  });
+}
+
+/** The document on disk. `null` when there is none yet. */
+export async function readDocFile(root: string): Promise<{ body: string; mtime: number } | null> {
+  const full = path.join(root, DOC_PATH);
+  try {
+    const [body, stat] = await Promise.all([fs.readFile(full, 'utf8'), fs.stat(full)]);
+    return { body, mtime: Math.round(stat.mtimeMs) };
+  } catch {
+    return null;
+  }
+}
+
+export async function writeDocFile(root: string, body: unknown): Promise<{ mtime: number }> {
+  if (typeof body !== 'string') throw new Refused('body must be a string');
+  JSON.parse(body); // refuse to write a document that will not read back
+  const full = path.join(root, DOC_PATH);
+  await fs.mkdir(path.dirname(full), { recursive: true });
+  await fs.writeFile(full, body, 'utf8');
+  return { mtime: Math.round((await fs.stat(full)).mtimeMs) };
+}
+
 // --- the plugin ------------------------------------------------------------
 
 const readBody = (req: IncomingMessage): Promise<unknown> =>
@@ -168,7 +274,7 @@ export function bridge(options: { root?: string } = {}): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://superflash');
-        if (!url.pathname.startsWith('/_fs/') && url.pathname !== '/_git') return next();
+        if (!url.pathname.startsWith('/_fs/') && !['/_git', '/_ask', '/_doc'].includes(url.pathname)) return next();
 
         const send = (code: number, value: unknown): void => {
           res.statusCode = code;
@@ -186,6 +292,19 @@ export function bridge(options: { root?: string } = {}): Plugin {
           if (url.pathname === '/_git') {
             const input = (await readBody(req)) as { args?: unknown };
             return send(200, await git(root, input.args));
+          }
+          if (url.pathname === '/_doc' && req.method === 'GET') return send(200, (await readDocFile(root)) ?? { body: null, mtime: 0 });
+          if (url.pathname === '/_doc') {
+            const input = (await readBody(req)) as { body?: unknown };
+            return send(200, await writeDocFile(root, input.body));
+          }
+          if (url.pathname === '/_ask') {
+            const input = (await readBody(req)) as { prompt?: unknown; session?: unknown };
+            res.statusCode = 200;
+            res.setHeader('content-type', 'application/x-ndjson');
+            res.setHeader('cache-control', 'no-cache');
+            await ask(root, input.prompt, input.session, (e) => res.write(`${JSON.stringify(e)}\n`));
+            return res.end();
           }
           return send(404, { error: 'no such route' });
         } catch (err) {
