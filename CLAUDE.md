@@ -41,8 +41,26 @@ valid JSON; the bridge refuses a document that will not parse.
 ## The repo is the document too
 
 Every text file here is also a Note (`file:<path>`). `seed/*.js` are the Types
-the app is made of; `src/` is the kernel. Editing them changes the running app
-on reload. `superflash-spec-v*.md` is the design, newest number wins.
+the app is made of; `src/` is the kernel. `superflash-spec-v*.md` is the design,
+newest number wins.
+
+**To add a Type, write `seed/<name>.js`.** It registers within ~4s, no reload,
+and every pin of that Type redraws. The shape:
+
+```js
+export const type = { name: 'voice', title: 'Voice' };
+export default function (host) {
+  return {
+    mount(box, note) { /* draw into box; note.body is the text */ },
+    onPatch(note) { /* the body changed under you */ },
+    focus() {}, blur() {}, save() {}, unmount() {},
+  };
+}
+```
+
+`host.read(id)`, `host.write(body)`, `host.emit(name, data)`; `host.fs()` for
+the repo if the Type is in `POLICY` (src/stage0.ts). Copy `seed/text.js` to
+start. Then pin a note with `"type": "<name>"` in the document file to show it.
 
 ## Chats
 

@@ -313,3 +313,27 @@ describe('reload', () => {
     expect(fresh.kernel.childPins(canvasNote(fresh.kernel)).length).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('hot Types', () => {
+  it('a Type written to seed/ on disk registers without a reload, and pins of it redraw', async () => {
+    const repo = fakeFs();
+    const root = host();
+    const { kernel, shell, files } = await stage0(root, memoryStore(), { fs: repo.fs });
+    const surface = kernel.getPin(shell!).note;
+
+    repo.outside('seed/voice.js', `export const type = { name: 'voice', title: 'Voice' };
+      export default () => ({ mount(box) { box.textContent = 'V1'; } });`);
+    await files!.pull();
+    await until(() => kernel.types.has('voice'));
+
+    kernel.pin(kernel.createNote('a memo').id, surface, 'voice');
+    await until(() => root.querySelector('.pin[data-type="voice"]')?.textContent === 'V1');
+
+    repo.outside('seed/voice.js', `export const type = { name: 'voice', title: 'Voice' };
+      export default () => ({ mount(box) { box.textContent = 'V2'; } });`);
+    await files!.pull();
+    await until(() => root.querySelector('.pin[data-type="voice"]')?.textContent === 'V2');
+    // And it is a module Note now, pointing at the file: it comes back on reload.
+    expect(kernel.allNotes().some((n) => n.body === '@voice.js')).toBe(true);
+  });
+});

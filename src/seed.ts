@@ -32,11 +32,16 @@ const POINTER = /^@([\w.-]+\.js)$/;
 
 export const pointer = (body: string): string | null => POINTER.exec(body.trim())?.[1] ?? null;
 
-/** What a module body compiles as: the file it points at, or itself. */
-export function resolve(body: string): string {
+/**
+ * What a module body compiles as: the file it points at, or itself. `live` is
+ * the file as the repo has it right now (the `file:seed/…` Note), which beats the
+ * copy baked in at build — so a Type written a moment ago compiles without a
+ * reload, and a Type that exists only on disk compiles at all.
+ */
+export function resolve(body: string, live?: (file: string) => string | undefined): string {
   const file = pointer(body);
   if (file === null) return body;
-  const source = FILES[file];
+  const source = live?.(file) ?? FILES[file];
   if (source === undefined) throw new Error(`seed points at a missing file: ${file}`);
   return source;
 }

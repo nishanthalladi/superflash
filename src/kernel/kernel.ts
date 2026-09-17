@@ -85,6 +85,7 @@ export class Kernel implements Undoable {
     if (id !== undefined && this.notes.has(id)) throw new Error(`Note already exists: ${id}`);
     const note: Note = { id: id ?? newId('note'), body };
     this.notes.set(note.id, note);
+    this.announce({ kind: 'doc', note: note.id });
     return note;
   }
 

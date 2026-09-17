@@ -75,7 +75,9 @@ export interface Stage0Options {
  */
 export async function stage0(root: HTMLElement, store: Store, options: Stage0Options = {}): Promise<Booted> {
   const kernel = new Kernel();
-  kernel.loader = (source) => loadSource(resolve(source));
+  const live = (file: string): string | undefined =>
+    kernel.hasNote(`file:seed/${file}`) ? kernel.body(`file:seed/${file}`) : undefined;
+  kernel.loader = (source) => loadSource(resolve(source, live));
   registerBuiltins(kernel);
 
   const stored = options.fresh ? null : readDoc(store);
@@ -104,9 +106,11 @@ export async function stage0(root: HTMLElement, store: Store, options: Stage0Opt
   // seed Type (every document before v4 did) is pointed back at the file, so an
   // edit to `seed/*.js` reaches it on reload instead of needing `?fresh=1`.
   if (!options.safe) {
-    // A seed Type the stored document has never heard of is added to it.
+    // A seed Type the stored document has never heard of is added to it — shipped
+    // with the build, or sitting in `seed/` on disk.
     const known = new Set(kernel.types.list().map((t) => `${t.name}.js`));
-    for (const file of Object.keys(FILES)) {
+    const onDisk = kernel.allNotes().flatMap((n) => (/^file:seed\/([\w.-]+\.js)$/.exec(n.id)?.[1] ? [n.id.slice('file:seed/'.length)] : []));
+    for (const file of new Set([...Object.keys(FILES), ...onDisk])) {
       if (known.has(file)) continue;
       const note = kernel.createNote(`@${file}`);
       await kernel.defineModule(note.id).catch((err) => console.warn('seed module failed', file, err));
@@ -134,6 +138,28 @@ export async function stage0(root: HTMLElement, store: Store, options: Stage0Opt
   kernel.watch((c) => {
     if (c.kind === 'pin:add' && kernel.hasPin(c.pin)) applyPolicy(kernel, kernel.getPin(c.pin));
   });
+
+  // Hot: `seed/<name>.js` changed on disk (an agent wrote a Type) → recompile it
+  // now. The canvas hears `defined` and remounts every pin of that Type. A file
+  // that is new gets a pointer Note, so it is a module from here on.
+  if (bridged && !options.safe) {
+    let pending: Promise<void> = Promise.resolve();
+    kernel.watch((c) => {
+      if (c.kind !== 'patch' && c.kind !== 'doc') return;
+      const file = c.note && /^file:seed\/([\w.-]+\.js)$/.exec(c.note)?.[1];
+      if (!file || !kernel.hasNote(c.note!)) return;
+      pending = pending.then(async () => {
+        let note = kernel.allNotes().find((n) => pointer(n.body) === file)?.id;
+        if (!note) note = kernel.createNote(`@${file}`).id;
+        try {
+          const info = await kernel.defineModule(note);
+          kernel.spine.emit(note, 'defined', { name: info.name });
+        } catch (err) {
+          console.warn('seed module did not compile', file, err);
+        }
+      });
+    });
+  }
 
   const save = autosave(kernel, store);
   const shell = shellPin(kernel);
