@@ -51,7 +51,12 @@ export default function (host) {
     const cs = getComputedStyle(text);
     const mirror = document.createElement('div');
     mirror.className = 'text-mirror';
-    mirror.style.cssText = `font:${cs.font};letter-spacing:${cs.letterSpacing};padding:${cs.padding};width:${text.clientWidth}px;line-height:${cs.lineHeight};tab-size:${cs.tabSize}`;
+    // Every longhand that moves a glyph, copied one by one: the `font` shorthand
+    // comes back empty in some browsers and the wrap points drift.
+    for (const k of ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant', 'lineHeight', 'letterSpacing', 'wordSpacing', 'textIndent', 'textTransform', 'tabSize', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth']) {
+      mirror.style[k] = cs[k];
+    }
+    mirror.style.width = `${text.getBoundingClientRect().width}px`;
     const marks = [];
     lines.forEach((l, i) => {
       const m = TASK.exec(l);

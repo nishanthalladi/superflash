@@ -68,6 +68,20 @@ describe('the document on disk', () => {
     expect(second.kernel.hasNote('note_d')).toBe(true);
   });
 
+  it('applyDoc re-parents a pin the file moved into another box', async () => {
+    const repo = fakeFs();
+    const { kernel, shell } = await stage0(host(), memoryStore(), { fs: repo.fs });
+    const surface = kernel.getPin(shell!).note;
+    const pin = kernel.childPins(surface)[0]!;
+    const folder = kernel.createNote('folder', 'note_folder');
+    kernel.pin(folder.id, surface, 'canvas');
+    const doc = forDisk(kernel.toJSON());
+    doc.pins.find((p) => p.id === pin.id)!.parent = folder.id;
+    applyDoc(kernel, doc);
+    expect(kernel.getPin(pin.id).parent).toBe(folder.id);
+    expect(kernel.childPins(folder.id).map((p) => p.id)).toEqual([pin.id]);
+  });
+
   it('applyDoc moves, removes, and leaves the mirror alone', async () => {
     const repo = fakeFs({ 'x.md': 'x' });
     const { kernel, shell } = await stage0(host(), memoryStore(), { fs: repo.fs });

@@ -80,6 +80,13 @@ export function applyDoc(kernel: Kernel, doc: Doc): void {
         continue;
       }
       const live = kernel.getPin(p.id);
+      if (live.parent !== p.parent || live.note !== p.note || live.type !== p.type) {
+        // A pin moved to another canvas (or changed what it shows): remake it in place.
+        kernel.unpin(p.id);
+        kernel.restorePin(p);
+        kernel.journal.record({ op: 'pin', pin: { ...p } });
+        continue;
+      }
       if (live.x !== p.x || live.y !== p.y || live.width !== p.width || live.height !== p.height) {
         kernel.move(p.id, { x: p.x, y: p.y, width: p.width, height: p.height });
       }
