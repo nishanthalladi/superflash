@@ -245,7 +245,7 @@ describe('drawing mode', () => {
     k.setFocus(null);
     key('v');
     expect(document.body.classList.contains('drawing')).toBe(false);
-    key('d', { metaKey: true, shiftKey: true });
+    key('d', { metaKey: true, shiftKey: true, cancelable: true });
     expect(document.body.classList.contains('drawing')).toBe(true);
     expect(document.body.dataset['tool']).toBe('select');
     key('Escape');

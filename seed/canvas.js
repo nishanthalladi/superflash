@@ -1228,6 +1228,7 @@ export default function (host) {
       // Escape steps out one layer at a time: out of the drawing tool, out of the
       // text, out of the selection, out of the note. So Delete has something to delete.
       if (e.key === 'Escape') {
+        e.preventDefault(); // one step per press, even with several canvases listening
         if (TOOL !== 'select') {
           setTool('select');
           return;
