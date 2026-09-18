@@ -175,7 +175,18 @@ export interface Mounted {
  * Mount the canvas on `note` the way `stage0` does: one pin on the root Note,
  * holding `shell`.
  */
+/** The last canvas a test mounted. One outer canvas at a time, as in the app. */
+let live: TypeInstance | null = null;
+
 export function mountCanvas(kernel: Kernel, root: HTMLElement, note: NoteId): Mounted {
+  // A test that leaves its canvas mounted would keep its window listeners; the
+  // app only ever has one outer canvas, so neither do the tests.
+  try {
+    live?.unmount?.();
+  } catch {
+    // a torn-down kernel may throw; the listeners are what matter
+  }
+  document.body.classList.remove('drawing');
   // The canvas stores its camera in localStorage, which jsdom shares across tests.
   try {
     localStorage.clear();
@@ -197,6 +208,7 @@ export function mountCanvas(kernel: Kernel, root: HTMLElement, note: NoteId): Mo
   const instance = kernel.types.get('canvas')(kernel.host(pin.id)) as Mounted['instance'];
   kernel.attach(pin.id, instance);
   instance.mount(root, kernel.note(note));
+  live = instance;
   return { instance, pin: pin.id };
 }
 

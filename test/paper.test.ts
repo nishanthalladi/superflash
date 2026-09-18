@@ -241,7 +241,6 @@ describe('drawing mode', () => {
   it('cmd+shift+d shows the tray with the cursor; Escape puts it away; a tool key opens it too', () => {
     const { k, desk, root } = setup();
     mountCanvas(k, root, desk.id);
-    document.body.classList.remove('drawing'); // earlier tests may have left the tray out
     k.setFocus(null);
     key('v');
     expect(document.body.classList.contains('drawing')).toBe(false);
