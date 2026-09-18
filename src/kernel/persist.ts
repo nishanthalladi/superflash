@@ -35,8 +35,37 @@ export function readDoc(store: Store, key = DOC_KEY): Doc | null {
   }
 }
 
+/**
+ * What the browser keeps: the document minus the repo mirror. `file:` Notes are
+ * the repo itself and come back from disk on boot; storing them once per
+ * snapshot is what filled localStorage and stopped the app booting.
+ */
+export function forStore(doc: Doc): Doc {
+  const notes = doc.notes.filter((n) => !n.id.startsWith('file:'));
+  const keep = new Set(notes.map((n) => n.id));
+  const pins = doc.pins.filter((p) => keep.has(p.note) && keep.has(p.parent));
+  const pinIds = new Set(pins.map((p) => p.id));
+  return {
+    ...doc,
+    notes,
+    pins,
+    grants: doc.grants.filter(([pin]) => pinIds.has(pin)),
+    modules: doc.modules.filter((m) => keep.has(m)),
+    focus: doc.focus && pinIds.has(doc.focus) ? doc.focus : null,
+  };
+}
+
+/** A full store must never take the app down: the document on disk is the real copy. */
+function put(store: Store, key: string, value: string): void {
+  try {
+    store.setItem(key, value);
+  } catch (err) {
+    console.warn('superflash: could not store', key, err);
+  }
+}
+
 export function writeDoc(store: Store, doc: Doc, key = DOC_KEY): void {
-  store.setItem(key, JSON.stringify(doc));
+  put(store, key, JSON.stringify(forStore(doc)));
 }
 
 /**
@@ -46,9 +75,9 @@ export function writeDoc(store: Store, doc: Doc, key = DOC_KEY): void {
 export function snapshot(store: Store, doc: Doc): void {
   for (let i = SNAP_KEEP - 1; i > 0; i -= 1) {
     const prev = store.getItem(`${SNAP_KEY}:${i - 1}`);
-    if (prev !== null) store.setItem(`${SNAP_KEY}:${i}`, prev);
+    if (prev !== null) put(store, `${SNAP_KEY}:${i}`, prev);
   }
-  store.setItem(`${SNAP_KEY}:0`, JSON.stringify(doc));
+  put(store, `${SNAP_KEY}:0`, JSON.stringify(forStore(doc)));
 }
 
 export function snapshots(store: Store): Doc[] {

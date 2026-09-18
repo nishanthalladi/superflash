@@ -144,3 +144,26 @@ describe('snapshots', () => {
     expect(store.getItem(`${SNAP_KEY}:0`)).not.toBeNull();
   });
 });
+
+describe('the store holds the notebook, not the repo', () => {
+  it('drops file: notes and their pins, and survives a full store', async () => {
+    const { Kernel } = await import('../src/kernel/kernel');
+    const { forStore, writeDoc, snapshot, readDoc } = await import('../src/kernel/persist');
+    const k = new Kernel();
+    const root = k.createNote('root');
+    k.root = root.id;
+    k.createNote('a file', 'file:src/a.ts');
+    k.types.define('text', () => ({ mount() {} }));
+    k.pin('file:src/a.ts', root.id, 'text');
+    const mine = k.createNote('mine');
+    k.pin(mine.id, root.id, 'text');
+    const slim = forStore(k.toJSON());
+    expect(slim.notes.map((n) => n.id)).toEqual([root.id, mine.id]);
+    expect(slim.pins).toHaveLength(1);
+
+    const full = { getItem: () => null, setItem: () => { throw new Error('QuotaExceededError'); }, removeItem: () => undefined };
+    expect(() => writeDoc(full, k.toJSON())).not.toThrow();
+    expect(() => snapshot(full, k.toJSON())).not.toThrow();
+    expect(readDoc(full)).toBeNull();
+  });
+});
