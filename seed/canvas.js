@@ -297,6 +297,8 @@ export default function (host) {
   let current = host.pin.note;
   let trail = [current];
   let drag = null;
+  /** Set by wirePointer: how a canvas below hands us a box mid-drag. */
+  let dragApi = null;
   /** The paper's ink: an svg under the pins, its scene group, and the selection ring. */
   let ink;
   let inkScene;
@@ -1183,7 +1185,7 @@ export default function (host) {
       e.preventDefault();
     });
 
-    on(viewport, 'pointermove', (e) => {
+    const dragMove = (e) => {
       if (!boxAt(e)) last = at(e);
       if (!drag || drag.mode === 'none') return;
       if (drag.mode === 'ink-draw' || drag.mode === 'ink-move') {
@@ -1202,6 +1204,8 @@ export default function (host) {
         return;
       }
 
+      if (drag.mode === 'forward') return drag.to.dragMove(e);
+
       if (!kernel.hasPin(drag.pin)) {
         drag = null;
         return;
@@ -1211,6 +1215,18 @@ export default function (host) {
       drag.at = { clientX: e.clientX, clientY: e.clientY };
 
       if (drag.mode === 'move') {
+        // Out of this box and onto the paper around it: the box jumps up now and
+        // keeps following the pointer there. We keep the capture and forward.
+        const up = outsideAt(e);
+        if (up && up.note !== current && up.instance && up.instance.grab) {
+          const moved = reparent(drag.pin, up.note, up.instance.toLocal(e));
+          if (moved) {
+            if (drag.overEl) drag.overEl.classList.remove('drop-target');
+            drag = { mode: 'forward', to: up.instance };
+            up.instance.grab(moved, e);
+            return;
+          }
+        }
         kernel.move(drag.pin, { x: snap(drag.start.x + dx), y: snap(drag.start.y + dy) });
         // Over a canvas box, at any depth: it lights up, and the drop goes inside it.
         // Deep by the DOM where there is layout; by geometry among our own children otherwise (jsdom).
@@ -1226,9 +1242,15 @@ export default function (host) {
           height: Math.max(MIN, snap(drag.start.height + dy)),
         });
       }
-    });
+    };
+    on(viewport, 'pointermove', dragMove);
 
     const end = () => {
+      if (drag && drag.mode === 'forward') {
+        drag.to.dragEnd();
+        drag = null;
+        return;
+      }
       if (drag && (drag.mode === 'ink-draw' || drag.mode === 'ink-move')) inkEnd();
       if (drag && drag.overEl) drag.overEl.classList.remove('drop-target');
       if (drag && drag.mode === 'move' && drag.at) {
@@ -1244,6 +1266,24 @@ export default function (host) {
     };
     on(viewport, 'pointerup', end);
     on(viewport, 'pointercancel', end);
+    dragApi = {
+      /** Take over a box that just arrived from a canvas below: drag it from where the pointer is. */
+      grab(pinId, e) {
+        const pin = kernel.getPin(pinId);
+        const p = at(e);
+        drag = {
+          mode: 'move',
+          pin: pinId,
+          from: { x: e.clientX, y: e.clientY },
+          // The pointer sits where it grabbed the bar; keep that grip.
+          start: { x: p.x - GRID * 2, y: p.y - GRID * 2, width: pin.width, height: pin.height },
+          at: { clientX: e.clientX, clientY: e.clientY },
+        };
+        kernel.setFocus(pinId);
+      },
+      dragMove,
+      dragEnd: end,
+    };
 
     on(
       viewport,
@@ -1646,6 +1686,9 @@ export default function (host) {
     retype,
     /** Screen → this canvas's coordinates, for whoever drops something into it. */
     toLocal: (e) => at(e),
+    grab: (pinId, e) => dragApi && dragApi.grab(pinId, e),
+    dragMove: (e) => dragApi && dragApi.dragMove(e),
+    dragEnd: () => dragApi && dragApi.dragEnd(),
     setView,
     get viewAs() {
       return views.get(current) || 'canvas';
