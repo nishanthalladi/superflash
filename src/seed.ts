@@ -9,6 +9,7 @@ import chatJs from '../seed/chat.js?raw';
 import sketchJs from '../seed/sketch.js?raw';
 import imageJs from '../seed/image.js?raw';
 import webJs from '../seed/web.js?raw';
+import terminalJs from '../seed/terminal.js?raw';
 
 /**
  * The seed document: the app as it ships — a blank canvas with one box on it.
@@ -32,6 +33,7 @@ export const FILES: Record<string, string> = {
   'sketch.js': sketchJs,
   'image.js': imageJs,
   'web.js': webJs,
+  'terminal.js': terminalJs,
 };
 
 const POINTER = /^@([\w.-]+\.js)$/;

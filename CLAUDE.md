@@ -26,8 +26,14 @@ Shape (`version` is always `3`):
 - A **Note** is `{ id, body }`. Line one of the body is its name.
 - A **Pin** places a Note on a parent Note at `x, y, width, height`, drawn by a
   `type`. The same Note can be pinned many times.
-- Pin `type` is how it is looked at: `canvas` (holds boxes), `text` (its body),
-  `chat` (a conversation with you). Other Types are tools; leave them alone.
+- Pin `type` is how it is looked at. Lenses you can use:
+  `canvas` (holds boxes) · `text` (its body; a `- [ ]` line is a checkbox) ·
+  `chat` (a conversation with you) · `sketch` (Excalidraw JSON after a blank
+  line, freedraw elements) · `image` (line two is `media/<file>`, then a blank
+  line, then a caption) · `web` (line two is a URL, then a blank line, then the
+  page's cached text) · `terminal` (a shell in the repo; body is just the name,
+  optional line two `cwd: <path>`). `code`, `tree`, `git-panel`, `split` are
+  tools; leave them alone.
 - The surface the user is looking at is the Note pinned on `root` — normally
   `note_2_canvas`. New boxes go on that, or inside whatever box they asked about.
 - Ids are any unique string. Use `note_<slug>` / `pin_<slug>`.
