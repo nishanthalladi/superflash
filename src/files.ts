@@ -89,6 +89,7 @@ export function httpFs(base = ''): FsClient {
             id = String(ev['id']);
             resolve({
               write: (data) => void post(`/_term/${id}/in`, { data }).catch(() => undefined),
+              resize: (cols, rows) => void post(`/_term/${id}/resize`, { cols, rows }).catch(() => undefined),
               close: () => stop.abort(),
             });
           }

@@ -1,4 +1,5 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { StringDecoder } from 'node:string_decoder';
 import { promises as dns } from 'node:dns';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -371,6 +372,7 @@ export interface TermEvent {
 export interface Term {
   id: string;
   write(data: string): void;
+  resize(cols: number, rows: number): void;
   kill(): void;
 }
 
@@ -381,16 +383,20 @@ let termSeq = 0;
  * pty.fork + a copy loop, instead of `pty.spawn`: on macOS spawn never notices
  * the child has exited while our stdin pipe is still open. EOF on stdin, or the
  * shell exiting, ends it; when node kills python the master closes and the shell
- * gets SIGHUP from the kernel.
+ * gets SIGHUP from the kernel. fd 3 is the control pipe: `COLS ROWS\n` sets the
+ * window size, and the kernel tells the shell (SIGWINCH).
  */
 const PTY = [
-  'import os,pty,select,sys',
+  'import fcntl,os,pty,select,struct,sys,termios',
   'pid,fd=pty.fork()',
   'if pid==0: os.execvp(sys.argv[1],sys.argv[1:])',
   'while True:',
-  '  r=select.select([fd,0],[],[],0.2)[0]',
+  '  r=select.select([fd,0,3],[],[],0.2)[0]',
   '  try:',
   '    if fd in r: os.write(1,os.read(fd,65536))',
+  '    if 3 in r:',
+  '      s=os.read(3,4096).split()',
+  '      if len(s)>1: fcntl.ioctl(fd,termios.TIOCSWINSZ,struct.pack(\'HHHH\',int(s[-1]),int(s[-2]),0,0))',
   '    if 0 in r:',
   '      d=os.read(0,65536)',
   '      if d: os.write(fd,d)',
@@ -421,12 +427,13 @@ export async function termOpen(
   const child = spawn('python3', ['-c', PTY, ...shell], {
     cwd: dir,
     shell: false,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, TERM: 'dumb', PROMPT_EOL_MARK: '' },
+    stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
+    env: { ...process.env, TERM: 'xterm-256color' },
   });
   terms.set(id, child);
   emit({ id });
-  child.stdout!.on('data', (c: Buffer) => emit({ text: c.toString() }));
+  const utf8 = new StringDecoder('utf8'); // a multi-byte char split across chunks stays whole
+  child.stdout!.on('data', (c: Buffer) => emit({ text: utf8.write(c) }));
   child.stderr!.on('data', (c: Buffer) => emit({ text: c.toString() }));
   child.on('error', (err) => emit({ text: `! ${err.message}\n` }));
   child.on('close', (code) => {
@@ -436,8 +443,16 @@ export async function termOpen(
   return {
     id,
     write: (data) => void child.stdin!.write(data),
+    resize: (cols, rows) => termResize(id, cols, rows),
     kill: () => void child.kill(),
   };
+}
+
+export function termResize(id: unknown, cols: unknown, rows: unknown): void {
+  const child = terms.get(String(id));
+  if (!child) throw new Refused(`no such terminal: ${String(id)}`);
+  if (!Number.isInteger(cols) || !Number.isInteger(rows)) throw new Refused('cols and rows must be integers');
+  (child.stdio[3] as NodeJS.WritableStream).write(`${cols as number} ${rows as number}\n`);
 }
 
 export function termWrite(id: unknown, data: unknown): void {
@@ -523,10 +538,11 @@ export function bridge(options: { root?: string } = {}): Plugin {
             res.on('close', term.kill); // the box went away: so does the shell
             return;
           }
-          const inRoute = /^\/_term\/([\w]+)\/in$/.exec(url.pathname);
-          if (inRoute) {
-            const input = (await readBody(req)) as { data?: unknown };
-            termWrite(inRoute[1], input.data);
+          const termRoute = /^\/_term\/(\w+)\/(in|resize)$/.exec(url.pathname);
+          if (termRoute) {
+            const input = (await readBody(req)) as { data?: unknown; cols?: unknown; rows?: unknown };
+            if (termRoute[2] === 'in') termWrite(termRoute[1], input.data);
+            else termResize(termRoute[1], input.cols, input.rows);
             return send(200, {});
           }
           // --- end terminal ---

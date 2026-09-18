@@ -70,6 +70,11 @@ export default function (host) {
 the repo if the Type is in `POLICY` (src/stage0.ts). Copy `seed/text.js` to
 start. Then pin a note with `"type": "<name>"` in the document file to show it.
 
+The app has one runtime dependency, `@xterm/xterm` (with its `addon-fit`): a
+terminal emulator is the one thing not worth writing here. Types cannot import
+packages (they load from data URLs), so `src/main.ts` hands it to them as
+`globalThis.superflash.libs.xterm`. Do not add another.
+
 ## Chats
 
 A `chat` box's body is the transcript. Its line two is

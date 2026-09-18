@@ -41,7 +41,7 @@ export interface FsClient {
     cwd: string,
     onText: (text: string) => void,
     onExit: (code: number | null) => void,
-  ): Promise<{ write(data: string): void; close(): void }>;
+  ): Promise<{ write(data: string): void; resize(cols: number, rows: number): void; close(): void }>;
 }
 
 /** What a Type looks like from the outside once it is registered. */

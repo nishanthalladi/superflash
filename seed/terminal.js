@@ -1,49 +1,43 @@
 export const type = { name: 'terminal', title: 'Terminal' };
 
 /**
- * Terminal. A real shell (zsh) in the repo, through the bridge. The body is NOT
- * the transcript — a shell is not a document. Line one is the name; an optional
+ * Terminal. A real shell (zsh) in the repo, through the bridge, drawn by xterm —
+ * the one library in the app, handed in as `globalThis.superflash.libs.xterm`
+ * because a hot-loaded Type cannot import a bare specifier. The body is NOT the
+ * transcript — a shell is not a document. Line one is the name; an optional
  * line two `cwd: <repo-relative path>` says where to start.
- *
- * Output is a <pre> with escape codes stripped; the line at the bottom sends on
- * Enter, and Ctrl+C sends ^C. No xterm: what a dumb terminal shows is enough for
- * a notebook.
  */
 
-// CSI, OSC (title, cwd), and the lone two-byte escapes; plus \r, which only
-// ever precedes \n or repaints a line we already have.
-const ANSI = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])|\r/g;
-
 const CSS = `
-.terminal { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--paper); }
-.terminal-out { flex: 1; min-height: 0; margin: 0; padding: 10px 12px; overflow: auto; color: var(--ink);
-  font-family: var(--mono); font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-all; }
-.terminal-in { flex: none; resize: none; border: 0; border-top: 1px solid var(--edge); padding: 6px 12px;
-  background: var(--paper-2); color: var(--ink); font-family: var(--mono); font-size: 12px; }
-.terminal-in:focus { outline: none; }
-.terminal-in::placeholder { color: var(--dim); }
+.terminal { flex: 1; min-height: 0; padding: 4px 0 0 6px; overflow: hidden; background: var(--paper); }
+.terminal .xterm-viewport { background: var(--paper) !important; }
 `;
 
 export default function (host) {
-  let out;
-  let input;
-  let term = null;
+  let xt;
+  let handle = null;
+  let watch;
 
   const cwd = () => (/^cwd: (.*)$/.exec(host.read(host.pin.note).split('\n')[1] || '') || [])[1] || '';
 
-  function print(text) {
-    out.textContent += text.replace(ANSI, '');
-    out.scrollTop = out.scrollHeight;
-  }
-
   async function open() {
+    let started = false;
+    xt.write('starting zsh…');
     try {
-      term = await host.fs().term(cwd().trim(), print, (code) => {
-        print(`\n[exit ${code}]`);
-        input.disabled = true;
-      });
+      handle = await host.fs().term(
+        cwd().trim(),
+        (text) => {
+          if (!started) {
+            started = true;
+            xt.reset();
+          }
+          xt.write(text);
+        },
+        (code) => xt.write(`\r\n[exit ${code}]`),
+      );
+      handle.resize(xt.cols, xt.rows);
     } catch (err) {
-      print(`! ${err && err.message ? err.message : String(err)}`);
+      xt.write(`\r\n! ${err && err.message ? err.message : String(err)}`);
     }
   }
 
@@ -56,32 +50,37 @@ export default function (host) {
         document.head.append(style);
       }
       box.classList.add('terminal');
-      out = document.createElement('pre');
-      out.className = 'terminal-out';
-      input = document.createElement('textarea');
-      input.className = 'terminal-in';
-      input.rows = 1;
-      input.spellcheck = false;
-      input.placeholder = '$';
-      input.addEventListener('keydown', (e) => {
-        if (!term) return;
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          term.write(`${input.value}\n`);
-          input.value = '';
-        } else if (e.key === 'c' && e.ctrlKey) {
-          e.preventDefault();
-          term.write('\x03');
-        }
+      const { Terminal, FitAddon } = globalThis.superflash.libs.xterm;
+      const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      xt = new Terminal({
+        fontFamily: token('--mono'),
+        fontSize: 12,
+        cursorBlink: true,
+        theme: { background: token('--paper'), foreground: token('--ink'), cursor: token('--brown'), selectionBackground: `${token('--gold')}55` },
       });
-      box.append(out, input);
+      const fit = new FitAddon();
+      xt.loadAddon(fit);
+      xt.open(box);
+      fit.fit();
+      xt.onData((data) => handle && handle.write(data));
+      xt.onResize(({ cols, rows }) => handle && handle.resize(cols, rows));
+      watch = new ResizeObserver(() => fit.fit());
+      watch.observe(box);
+      // The canvas zooms on wheel and takes Ctrl/Cmd shortcuts; in here the wheel
+      // scrolls the buffer and Ctrl belongs to the shell. Cmd still reaches the canvas.
+      box.addEventListener('wheel', (e) => e.stopPropagation());
+      box.addEventListener('keydown', (e) => {
+        if (!e.metaKey) e.stopPropagation();
+      });
       void open();
     },
     focus() {
-      input.focus();
+      xt.focus();
     },
     unmount() {
-      if (term) term.close();
+      watch.disconnect();
+      if (handle) handle.close();
+      xt.dispose();
     },
   };
 }

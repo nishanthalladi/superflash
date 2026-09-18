@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DENY, MAX_BYTES, Refused, git, list, media, read, resolveSafe, termOpen, termWrite, write } from '../plugins/bridge';
+import { DENY, MAX_BYTES, Refused, git, list, media, read, resolveSafe, termOpen, termWrite, termResize, write } from '../plugins/bridge';
 
 let root: string;
 let outside: string;
@@ -149,6 +149,10 @@ describe('terminal', () => {
     for (let i = 0; i < 200 && !got.join('').includes('marker-23'); i += 1) await new Promise((r) => setTimeout(r, 25));
     expect(got.join('')).toContain('marker-23');
     expect(got.join('')).toContain(path.join('repo', 'src'));
+    term.resize(100, 24);
+    term.write('stty size\n');
+    for (let i = 0; i < 200 && !got.join('').includes('24 100'); i += 1) await new Promise((r) => setTimeout(r, 25));
+    expect(got.join('')).toContain('24 100');
     term.write('exit\n');
     for (let i = 0; i < 200 && exit === undefined; i += 1) await new Promise((r) => setTimeout(r, 25));
     expect(exit).toBe(0);
@@ -158,5 +162,6 @@ describe('terminal', () => {
   it('refuses a cwd outside the repo and a non-string keystroke', async () => {
     await expect(termOpen(root, '../secrets', () => undefined, ['sh'])).rejects.toThrow(Refused);
     expect(() => termWrite('nope', 'x')).toThrow(Refused);
+    expect(() => termResize('nope', 80, 24)).toThrow(Refused);
   });
 });

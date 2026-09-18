@@ -8,10 +8,41 @@ import { fakeFs, mountOne, until } from './help';
 
 const terminal = (await loadSource(terminalJs))['default'] as TypeFactory;
 
-beforeEach(() => document.body.replaceChildren());
+/** Just enough of xterm's surface for the Type to lean on. */
+const opened: FakeTerminal[] = [];
+class FakeTerminal {
+  cols = 80;
+  rows = 24;
+  written = '';
+  el: HTMLElement | null = null;
+  disposed = false;
+  private data: ((d: string) => void)[] = [];
+  constructor(public options: Record<string, unknown>) {
+    opened.push(this);
+  }
+  open(el: HTMLElement) { this.el = el; }
+  write(s: string) { this.written += s; }
+  reset() { this.written = ''; }
+  onData(cb: (d: string) => void) { this.data.push(cb); }
+  onResize() {}
+  loadAddon() {}
+  focus() {}
+  dispose() { this.disposed = true; }
+  type(d: string) { for (const cb of this.data) cb(d); }
+}
+class FakeFit { fit() {} }
+Object.assign(globalThis, {
+  superflash: { libs: { xterm: { Terminal: FakeTerminal, FitAddon: FakeFit } } },
+  ResizeObserver: class { observe() {} disconnect() {} },
+});
+
+beforeEach(() => {
+  document.body.replaceChildren();
+  opened.length = 0;
+});
 
 describe('terminal: a shell in a box', () => {
-  it('opens a shell where the body says, sends lines, shows output without escapes', async () => {
+  it('opens xterm where the body says, streams bytes in, sends keys out, closes with the box', async () => {
     const k = new Kernel();
     const { fs, terms } = fakeFs();
     k.fs = fs;
@@ -23,23 +54,26 @@ describe('terminal: a shell in a box', () => {
     root.replaceChildren();
     instance.mount(root, k.note(k.getPin(pin).note));
 
-    expect(root.querySelector('.terminal-out')).not.toBeNull();
     expect(document.getElementById('type-terminal')).not.toBeNull();
+    expect(opened).toHaveLength(2);
+    const xt = opened[1]!;
+    expect(xt.el).toBe(root);
+    expect(xt.options['theme']).toMatchObject({ background: expect.any(String) });
+    expect(xt.written).toContain('starting zsh');
     await until(() => terms.length === 2);
     expect(terms.map((t) => t.cwd)).toEqual(['', 'src']);
+    await until(() => terms[1]!.size.length === 2);
+    expect(terms[1]!.size).toEqual([80, 24]);
 
-    const input = root.querySelector<HTMLTextAreaElement>('.terminal-in')!;
-    input.value = 'ls';
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
-    expect(terms[1]!.typed).toEqual(['ls\n', '\x03']);
-    expect(input.value).toBe('');
+    xt.type('ls\r');
+    xt.type('\x03');
+    expect(terms[1]!.typed).toEqual(['ls\r', '\x03']);
 
-    terms[1]!.emit('\x1b[?2004hls\x1b[?2004l\r\r\n\x1b[1;32mseed\x1b[0m  src\r\n\x1b]7;file://x/y\x07% ');
-    expect(root.querySelector('.terminal-out')!.textContent).toBe('ls\nseed  src\n% ');
+    terms[1]!.emit('\x1b[1;32mseed\x1b[0m  src\r\n% ');
+    expect(xt.written).toBe('\x1b[1;32mseed\x1b[0m  src\r\n% '); // nothing stripped; the wait line is gone
 
-    terms[1]!.exit(0);
-    expect(root.querySelector('.terminal-out')!.textContent).toContain('[exit 0]');
-    expect(input.disabled).toBe(true);
+    instance.unmount!(); // close() on the fake handle exits the shell
+    expect(xt.written).toContain('[exit 0]');
+    expect(xt.disposed).toBe(true);
   });
 });

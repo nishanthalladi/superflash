@@ -62,7 +62,7 @@ export function fakeFs(seed: Record<string, string> = {}) {
   const asked: { prompt: string; session?: string }[] = [];
   const media: { name: string; type: string; base64: string }[] = [];
   const fetched: string[] = [];
-  const terms: { cwd: string; typed: string[]; emit: (text: string) => void; exit: (code: number | null) => void }[] = [];
+  const terms: { cwd: string; typed: string[]; size: number[]; emit: (text: string) => void; exit: (code: number | null) => void }[] = [];
   let docFile: string | null = null;
   let docMtime = 0;
   let clock = 1;
@@ -111,8 +111,9 @@ export function fakeFs(seed: Record<string, string> = {}) {
     },
     async term(cwd, onText, onExit) {
       const typed: string[] = [];
-      terms.push({ cwd, typed, emit: onText, exit: onExit });
-      return { write: (data) => void typed.push(data), close: () => onExit(0) };
+      const size: number[] = [];
+      terms.push({ cwd, typed, size, emit: onText, exit: onExit });
+      return { write: (data) => void typed.push(data), resize: (c, r) => void size.splice(0, 2, c, r), close: () => onExit(0) };
     },
   };
 
