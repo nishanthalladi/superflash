@@ -6,6 +6,9 @@ import gitPanelJs from '../seed/git-panel.js?raw';
 import splitJs from '../seed/split.js?raw';
 import textJs from '../seed/text.js?raw';
 import chatJs from '../seed/chat.js?raw';
+import sketchJs from '../seed/sketch.js?raw';
+import imageJs from '../seed/image.js?raw';
+import webJs from '../seed/web.js?raw';
 
 /**
  * The seed document: the app as it ships — a blank canvas with one box on it.
@@ -26,6 +29,9 @@ export const FILES: Record<string, string> = {
   'split.js': splitJs,
   'text.js': textJs,
   'chat.js': chatJs,
+  'sketch.js': sketchJs,
+  'image.js': imageJs,
+  'web.js': webJs,
 };
 
 const POINTER = /^@([\w.-]+\.js)$/;
