@@ -923,6 +923,17 @@ body:not(.drawing) .canvas-tools {
   display: none !important;
 }
 
+.canvas-menu-group.is-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.canvas-menu-group.is-button:hover {
+  color: var(--ink);
+}
+
 .canvas-menu-group {
   padding: 6px 10px 2px;
   color: var(--dim);

@@ -185,7 +185,8 @@ describe('one menu: what do you want here?', () => {
     const menu = document.querySelector('.canvas-menu')!;
     expect(menu.querySelector('.canvas-menu-search')).not.toBeNull();
     const buttons = [...menu.querySelectorAll<HTMLElement>('button')];
-    expect(buttons.length).toBe(k.types.list().filter((t) => t.lens !== false).length + 7); // six draws and drawing mode
+    expect(buttons.length).toBe(k.types.list().filter((t) => t.lens !== false).length + 6); // six draws
+    expect(menu.querySelector('.canvas-menu-group.is-button .canvas-menu-key')!.getAttribute('data-key')).toBe('⌘⇧D');
     for (const b of buttons) expect(b.querySelector('svg')).not.toBeNull();
     const rect = buttons.find((b) => b.textContent === 'rectangle')!;
     const hint = rect.querySelector<HTMLElement>('.canvas-menu-key')!;

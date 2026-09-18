@@ -139,6 +139,34 @@ const keyHint = (k) =>
   (k || '').replace('cmd+', '⌘').replace('ctrl+', '⌃').replace('alt+', '⌥').replace('shift+', '⇧').replace(/(.)$/, (c) => c.toUpperCase());
 const MODIFIERS = new Set(['meta', 'control', 'alt', 'shift']);
 
+/** The little key on a row or header: click it, press the new chord. Backspace clears, Escape keeps. */
+function keyButton(kernel, bind, key) {
+  const hint = document.createElement('kbd');
+  hint.className = 'canvas-menu-key';
+  // Drawn from `data-key` by CSS, so the row's text stays just its label.
+  const show = (k) => (hint.dataset.key = keyHint(k) || '·');
+  show(key);
+  hint.title = 'click to change the shortcut';
+  hint.onclick = (e) => {
+    e.stopPropagation();
+    hint.dataset.key = 'press…';
+    hint.classList.add('recording');
+    const done = (ev) => {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      if (MODIFIERS.has(ev.key.toLowerCase())) return; // wait for the real key
+      window.removeEventListener('keydown', done, { capture: true });
+      hint.classList.remove('recording');
+      if (ev.key === 'Escape') return show(key);
+      const chord = ev.key === 'Backspace' ? '' : keyName(ev);
+      setKey(kernel, bind, chord);
+      show(chord);
+    };
+    window.addEventListener('keydown', done, { capture: true });
+  };
+  return hint;
+}
+
 /** Rebind `name` in the settings note. Empty clears it. */
 function setKey(kernel, name, key) {
   if (!kernel.hasNote(SETTINGS)) return;
@@ -659,6 +687,15 @@ export default function (host) {
         h.className = 'canvas-menu-group';
         h.textContent = group;
         h.dataset.group = group;
+        // The draw header is drawing mode itself: click it, or press its chord.
+        if (group === 'draw') {
+          h.classList.add('is-button');
+          h.onclick = () => {
+            closeMenu();
+            fire('draw', new Event('x'));
+          };
+          h.append(keyButton(kernel, 'draw', KEYS.draw));
+        }
         el.append(h);
         heads.push(h);
       }
@@ -668,33 +705,7 @@ export default function (host) {
       label.textContent = item.label;
       b.append(label);
       b.dataset.group = item.group || '';
-      if (item.bind) {
-        // The shortcut is a button of its own: click it, press the new chord.
-        const hint = document.createElement('kbd');
-        hint.className = 'canvas-menu-key';
-        // Drawn from `data-key` by CSS, so the row's text stays just its label.
-        const show = (k) => (hint.dataset.key = keyHint(k) || '·');
-        show(item.key);
-        hint.title = 'click to change the shortcut';
-        hint.onclick = (e) => {
-          e.stopPropagation();
-          hint.dataset.key = 'press…';
-          hint.classList.add('recording');
-          const done = (ev) => {
-            ev.preventDefault();
-            ev.stopImmediatePropagation();
-            if (MODIFIERS.has(ev.key.toLowerCase())) return; // wait for the real key
-            window.removeEventListener('keydown', done, { capture: true });
-            hint.classList.remove('recording');
-            if (ev.key === 'Escape') return show(item.key);
-            const chord = ev.key === 'Backspace' ? '' : keyName(ev);
-            setKey(kernel, item.bind, chord);
-            show(chord);
-          };
-          window.addEventListener('keydown', done, { capture: true });
-        };
-        b.append(hint);
-      }
+      if (item.bind) b.append(keyButton(kernel, item.bind, item.key));
       b.classList.toggle('chosen', !!item.chosen);
       b.onclick = () => {
         closeMenu();
@@ -774,8 +785,7 @@ export default function (host) {
       bind: `add:${t.name}`,
       on: () => place(point, t.name, t.name === 'canvas' ? '' : '\n'),
     }));
-    const mode = { group: 'draw', label: 'drawing mode', icon: ICONS.keys, key: KEYS.draw, bind: 'draw', on: () => fire('draw', new Event('x')) };
-    menu(x, y, [...add, ...draw, mode], true);
+    menu(x, y, [...add, ...draw], true);
   }
 
   /** A box's bar: how to look at it, and what to do with it. */
