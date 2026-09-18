@@ -18,18 +18,19 @@ const restOf = (body) => body.split('\n').slice(1).join('\n');
 const nameOf = (body) => body.split('\n')[0] || '';
 const join = (name, rest) => (rest === '' ? name : `${name}\n${rest}`);
 
-/** How wide one character of this font is — a proportional face has no `ch` to trust. */
+/** How wide this exact text is in this font — a proportional face has no `ch` to trust. */
 const widths = new Map();
-function charWidth(font) {
-  if (!widths.has(font)) {
+function textWidth(font, text) {
+  const key = `${font}\u0000${text}`;
+  if (!widths.has(key)) {
     const probe = document.createElement('span');
     probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:${font}`;
-    probe.textContent = '- [ ] - [ ] ';
+    probe.textContent = text;
     document.body.append(probe);
-    widths.set(font, probe.getBoundingClientRect().width / 12 || 7);
+    widths.set(key, probe.getBoundingClientRect().width || text.length * 7);
     probe.remove();
   }
-  return widths.get(font);
+  return widths.get(key);
 }
 
 /** Real ESM from a string, so a box can be run. No eval. */
@@ -61,17 +62,17 @@ export default function (host) {
     const line = parseFloat(cs.lineHeight) || 20;
     const top = parseFloat(cs.paddingTop) || 0;
     const left = parseFloat(cs.paddingLeft) || 0;
-    const ch = charWidth(cs.font);
     lines.forEach((l, i) => {
       const m = TASK.exec(l);
       if (!m) return;
       const cover = document.createElement('label');
       cover.className = 'text-task';
       cover.style.top = `${top + i * line - text.scrollTop}px`;
-      cover.style.left = `${left + m[1].length * ch}px`;
-      cover.style.width = `${6 * ch}px`;
+      // Cover exactly the `- [ ] ` prefix, wherever this font puts its right edge.
+      cover.style.left = `${left + textWidth(cs.font, m[1])}px`;
+      cover.style.width = `${textWidth(cs.font, m[0]) - textWidth(cs.font, m[1])}px`;
       cover.style.justifyContent = 'flex-start';
-      cover.style.paddingLeft = `${ch}px`;
+      cover.style.paddingLeft = `${textWidth(cs.font, '- ')}px`;
       cover.style.height = `${line}px`;
       const box = document.createElement('input');
       box.type = 'checkbox';
