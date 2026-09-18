@@ -29,6 +29,8 @@ export interface FsClient {
   /** The live document on disk, so an agent in the repo sees what you see. */
   readDoc(): Promise<{ body: string | null; mtime: number }>;
   writeDoc(body: string): Promise<{ mtime: number }>;
+  /** A web page, fetched server-side: its title and readable text. */
+  web(url: string): Promise<{ title: string; text: string }>;
 }
 
 /** What a Type looks like from the outside once it is registered. */

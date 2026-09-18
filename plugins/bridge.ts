@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
+import { promises as dns } from 'node:dns';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { IncomingMessage } from 'node:http';
@@ -248,6 +249,88 @@ export async function writeDocFile(root: string, body: unknown): Promise<{ mtime
   return { mtime: Math.round((await fs.stat(full)).mtimeMs) };
 }
 
+// --- web -------------------------------------------------------------------
+
+export const WEB_MAX = 2 * 1024 * 1024;
+/** Loopback, link-local, RFC1918, and their IPv6 kin. Hostnames are resolved and checked too. */
+const PRIVATE = /^(localhost$|127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::1$|::$|f[cd][0-9a-f]{2}:|fe80:)/i;
+
+const isPrivate = (addr: string): boolean => {
+  let a = addr.replace(/^\[|\]$/g, '').replace(/^::ffff:/i, '');
+  // `[::ffff:127.0.0.1]` comes out of `new URL` as `::ffff:7f00:1`.
+  const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(a);
+  if (hex) a = [hex[1]!, hex[2]!].flatMap((h) => [parseInt(h, 16) >> 8, parseInt(h, 16) & 255]).join('.');
+  return PRIVATE.test(a);
+};
+
+async function checkHost(host: string): Promise<void> {
+  if (!host || isPrivate(host)) throw new Refused(`private host: ${host}`);
+  const { address } = await dns.lookup(host).catch(() => ({ address: '' }));
+  if (isPrivate(address)) throw new Refused(`private host: ${host}`);
+}
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const decode = (s: string): string =>
+  s
+    .replace(/&#x([0-9a-f]+);/gi, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+    .replace(/&(amp|lt|gt|quot|apos|nbsp);/g, (_, e: string) => ENTITIES[e]!);
+
+/** Readable text from HTML with a few regexes. ponytail: no Readability; good enough for a note. */
+export function extract(html: string): { title: string; text: string } {
+  const title = decode(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? '').replace(/\s+/g, ' ').trim();
+  const text = decode(
+    html
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<(head|script|style|noscript|svg|nav|footer|template)\b[\s\S]*?<\/\1\s*>/gi, ' ')
+      .replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote|pre|td|th)\s*>|<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, ' '),
+  )
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim();
+  return { title, text };
+}
+
+async function capped(body: ReadableStream<Uint8Array> | null): Promise<string> {
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (body) {
+    for await (const c of body as unknown as AsyncIterable<Uint8Array>) {
+      chunks.push(c);
+      size += c.length;
+      if (size > WEB_MAX) break;
+    }
+  }
+  return Buffer.concat(chunks).subarray(0, WEB_MAX).toString('utf8');
+}
+
+/** Fetch a page for a `web` note. http(s) only, redirects checked hop by hop, 10s, 2MB. */
+export async function fetchWeb(raw: unknown): Promise<{ title: string; text: string }> {
+  let url: URL;
+  try {
+    url = new URL(String(raw));
+  } catch {
+    throw new Refused(`not a url: ${String(raw)}`);
+  }
+  for (let hop = 0; ; hop += 1) {
+    if (!/^https?:$/.test(url.protocol)) throw new Refused(`not http(s): ${url}`);
+    await checkHost(url.hostname);
+    const res = await fetch(url, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10_000),
+      headers: { 'user-agent': 'superflash', accept: 'text/html,*/*' },
+    });
+    const to = res.headers.get('location');
+    if (res.status >= 300 && res.status < 400 && to && hop < 5) {
+      url = new URL(to, url);
+      continue;
+    }
+    if (!res.ok) throw new Error(`${res.status} ${url}`);
+    return extract(await capped(res.body));
+  }
+}
+
 // --- the plugin ------------------------------------------------------------
 
 const readBody = (req: IncomingMessage): Promise<unknown> =>
@@ -274,7 +357,7 @@ export function bridge(options: { root?: string } = {}): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://superflash');
-        if (!url.pathname.startsWith('/_fs/') && !['/_git', '/_ask', '/_doc'].includes(url.pathname)) return next();
+        if (!url.pathname.startsWith('/_fs/') && !['/_git', '/_ask', '/_doc', '/_web'].includes(url.pathname)) return next();
 
         const send = (code: number, value: unknown): void => {
           res.statusCode = code;
@@ -298,6 +381,7 @@ export function bridge(options: { root?: string } = {}): Plugin {
             const input = (await readBody(req)) as { body?: unknown };
             return send(200, await writeDocFile(root, input.body));
           }
+          if (url.pathname === '/_web') return send(200, await fetchWeb(url.searchParams.get('url') ?? ''));
           if (url.pathname === '/_ask') {
             const input = (await readBody(req)) as { prompt?: unknown; session?: unknown };
             res.statusCode = 200;

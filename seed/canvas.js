@@ -641,7 +641,9 @@ export default function (host) {
       const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
       if (!text) return;
       e.preventDefault();
-      place(centre(), 'text', `\n${text}`);
+      // One http(s) URL is a web box; anything else is text.
+      const url = /^https?:\/\/\S+$/.test(text.trim()) && kernel.types.has('web');
+      place(centre(), url ? 'web' : 'text', `\n${url ? text.trim() : text}`);
     });
   }
 

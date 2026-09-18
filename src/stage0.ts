@@ -33,6 +33,7 @@ export const POLICY: Record<string, Grant[]> = {
   code: [DEFINE],
   tree: [FS],
   'git-panel': [FS],
+  web: [FS],
 };
 
 export function applyPolicy(kernel: Kernel, pin: Pin): void {
