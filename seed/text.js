@@ -56,7 +56,8 @@ export default function (host) {
     for (const k of ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'fontVariant', 'lineHeight', 'letterSpacing', 'wordSpacing', 'textIndent', 'textTransform', 'tabSize', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth']) {
       mirror.style[k] = cs[k];
     }
-    mirror.style.width = `${text.getBoundingClientRect().width}px`;
+    // Layout pixels, not screen pixels: this box may sit in a zoomed canvas.
+    mirror.style.width = `${text.offsetWidth}px`;
     const marks = [];
     lines.forEach((l, i) => {
       const m = TASK.exec(l);
@@ -75,14 +76,15 @@ export default function (host) {
     });
     text.parentElement.append(mirror);
     const base = mirror.getBoundingClientRect();
+    const scale = base.width / (mirror.offsetWidth || 1); // the canvas zoom, undone
     for (const { i, box, done } of marks) {
       const r = box.getBoundingClientRect();
       const cover = document.createElement('label');
       cover.className = 'text-task';
-      cover.style.top = `${r.top - base.top - text.scrollTop}px`;
-      cover.style.left = `${r.left - base.left - 1}px`;
-      cover.style.width = `${r.width + 2}px`;
-      cover.style.height = `${r.height}px`;
+      cover.style.top = `${(r.top - base.top) / scale - text.scrollTop}px`;
+      cover.style.left = `${(r.left - base.left) / scale - 1}px`;
+      cover.style.width = `${r.width / scale + 2}px`;
+      cover.style.height = `${r.height / scale}px`;
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.checked = done;
