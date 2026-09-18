@@ -156,7 +156,7 @@ describe('one menu: what do you want here?', () => {
 
     root.querySelector<HTMLElement>('.pin .canvas-bar')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     const labels = [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].map((b) => b.textContent);
-    expect(labels).toEqual(expect.arrayContaining(['canvas', 'text', 'go inside', 'duplicate', 'delete']));
+    expect(labels).toEqual(expect.arrayContaining(['canvas', 'text', 'go inside', 'duplicate (same note)', 'duplicate as a copy', 'delete']));
     [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].find((b) => b.textContent === 'delete')!.click();
     expect(k.hasPin(pin.id)).toBe(false);
   });

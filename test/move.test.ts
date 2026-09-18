@@ -130,3 +130,56 @@ describe('move to…', () => {
     expect(rows()).toEqual(['desk']);
   });
 });
+
+describe('copy: by reference and by value', () => {
+  it('Cmd+C pastes the same note; Cmd+Shift+C pastes a new note with the same words', () => {
+    const { k, desk, root, pins } = setup(['text']);
+    const note = pins[0]!.note;
+    ev(root.querySelector('.pin')!, 'pointerdown');
+    (document.activeElement as HTMLElement | null)?.blur();
+
+    key('c', { metaKey: true });
+    key('v', { metaKey: true });
+    expect(k.childPins(desk.id).map((p) => p.note)).toEqual([note, note]); // one note, two boxes
+
+    (document.activeElement as HTMLElement | null)?.blur(); // the pasted box took the caret; Cmd+C there copies text
+    key('c', { metaKey: true, shiftKey: true });
+    key('v', { metaKey: true });
+    const notes = k.childPins(desk.id).map((p) => p.note);
+    expect(notes).toHaveLength(3);
+    expect(notes[2]).not.toBe(note);
+    expect(k.body(notes[2]!)).toBe(k.body(note));
+    k.patch(notes[2]!, 'n0\nchanged');
+    expect(k.body(note)).toBe('n0'); // its own life now
+  });
+
+  it('a copy goes all the way down: the boxes inside are copies too', () => {
+    const { k, desk, root, pins } = setup(['canvas']);
+    const outerNote = pins[0]!.note;
+    const inner = k.createNote('inner\nwords');
+    k.pin(inner.id, outerNote, 'text', { x: 8, y: 16, width: 100, height: 50 });
+    k.pin(inner.id, outerNote, 'text', { x: 200, y: 16, width: 100, height: 50 }); // pinned twice inside
+    ev(bar(root), 'contextmenu', { clientX: 10, clientY: 10 });
+    pick('duplicate as a copy');
+
+    const copy = k.childPins(desk.id).map((p) => p.note).find((n) => n !== outerNote)!;
+    const kids = k.childPins(copy);
+    expect(kids).toHaveLength(2);
+    expect(kids[0]!.note).not.toBe(inner.id);
+    expect(kids[0]!.note).toBe(kids[1]!.note); // twice inside → one copy, pinned twice
+    expect(kids[0]).toMatchObject({ x: 8, y: 16, type: 'text' });
+    expect(k.body(kids[0]!.note)).toBe('inner\nwords');
+    k.patch(kids[0]!.note, 'inner\nedited');
+    expect(k.body(inner.id)).toBe('inner\nwords');
+  });
+
+  it('the bar menu offers both kinds of duplicate', () => {
+    const { k, desk, root, pins } = setup(['text']);
+    ev(bar(root), 'contextmenu', { clientX: 10, clientY: 10 });
+    pick('duplicate as a copy');
+    const notes = k.childPins(desk.id).map((p) => p.note);
+    expect(notes).toHaveLength(2);
+    expect(notes[1]).not.toBe(pins[0]!.note);
+    expect(k.body(notes[1]!)).toBe('n0');
+  });
+});

@@ -507,6 +507,71 @@ export default function (host) {
     return null;
   }
 
+  /**
+   * From inside a nested canvas: the canvas the pointer is over once it has left
+   * this one — an enclosing box, or the outermost paper. `null` while still inside.
+   */
+  function outsideAt(e) {
+    if (outer || typeof document.elementFromPoint !== 'function') return null;
+    const r = viewport.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return null;
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const holder = hit && hit.closest ? hit.closest('.canvas-inside, .canvas-viewport') : null;
+    if (!holder) return null;
+    const pinEl = holder.closest('.pin');
+    if (pinEl && kernel.hasPin(pinEl.dataset.pin)) {
+      const id = pinEl.dataset.pin;
+      return { note: kernel.getPin(id).note, instance: kernel.instance(id) };
+    }
+    const top = kernel.childPins(kernel.root)[0];
+    const inst = top && kernel.instance(top.id);
+    return inst ? { note: inst.noteId, instance: inst } : null;
+  }
+
+  /**
+   * A copy of a note, all the way down: same text, and every box inside it is a
+   * copy too, in the same place. A note that appears twice inside is copied once.
+   */
+  function cloneNote(noteId, seen = new Map()) {
+    if (seen.has(noteId)) return seen.get(noteId);
+    const made = kernel.createNote(kernel.body(noteId));
+    seen.set(noteId, made.id);
+    for (const p of kernel.childPins(noteId)) {
+      kernel.pin(cloneNote(p.note, seen), made.id, p.type, { x: p.x, y: p.y, width: p.width, height: p.height });
+    }
+    return made.id;
+  }
+
+  /** Put what was cut or copied on `current` at `p`. A by-value copy is a fresh note with the same text. */
+  function pasteClip(p) {
+    if (!CLIP || !kernel.hasNote(CLIP.note)) return null;
+    const { type: type_, width, height, value } = CLIP;
+    let note = CLIP.note;
+    if (!value && (note === current || kernel.contains(note, current))) return console.warn('superflash: cannot move a box there');
+    const made = kernel.journal.transact('paste', () => {
+      if (value) note = cloneNote(note);
+      return kernel.pin(note, current, type_, { x: snap(p.x), y: snap(p.y), width, height });
+    });
+    kernel.setFocus(made.id);
+    return made.id;
+  }
+
+  /** A second box with the same words, but its own note: edits stop being shared. */
+  function duplicateValue(pinId) {
+    if (!kernel.hasPin(pinId)) return null;
+    const pin = kernel.getPin(pinId);
+    const copy = kernel.journal.transact('duplicate', () =>
+      kernel.pin(cloneNote(pin.note), pin.parent, pin.type, {
+        x: pin.x + GRID * 3,
+        y: pin.y + GRID * 3,
+        width: pin.width,
+        height: pin.height,
+      }),
+    );
+    kernel.setFocus(copy.id);
+    return copy.id;
+  }
+
   /** Every note somewhere shown as a canvas, the surface first, except `not` and what it holds. */
   const canvasNotes = (not) =>
     [...new Set(kernel.pinsOfType('canvas').map((p) => p.note))]
@@ -861,7 +926,8 @@ export default function (host) {
     menu(x, y, [
       ...look,
       { group: 'box', label: 'go inside', icon: ICONS.inside, on: () => enter(pin.note) },
-      { group: 'box', label: 'duplicate', icon: ICONS.duplicate, on: () => duplicate(pinId) },
+      { group: 'box', label: 'duplicate (same note)', icon: ICONS.duplicate, on: () => duplicate(pinId) },
+      { group: 'box', label: 'duplicate as a copy', icon: ICONS.duplicate, on: () => duplicateValue(pinId) },
       {
         group: 'box',
         label: 'move to…',
@@ -1161,13 +1227,14 @@ export default function (host) {
 
     const end = () => {
       if (drag && (drag.mode === 'ink-draw' || drag.mode === 'ink-move')) inkEnd();
-      if (drag && drag.over) {
-        if (drag.overEl) drag.overEl.classList.remove('drop-target');
-        if (kernel.hasPin(drag.over)) {
-          // Land where the pointer let go, in that canvas's own coordinates.
-          const inside = kernel.instance(drag.over);
-          const point = inside && inside.toLocal && drag.at ? inside.toLocal(drag.at) : { x: GRID * 4, y: GRID * 5 };
-          reparent(drag.pin, kernel.getPin(drag.over).note, point);
+      if (drag && drag.overEl) drag.overEl.classList.remove('drop-target');
+      if (drag && drag.mode === 'move' && drag.at) {
+        // Land where the pointer let go, in that canvas's own coordinates — a box
+        // below us, or, from inside a nested canvas, whatever paper lies outside it.
+        const target = drag.over && kernel.hasPin(drag.over) ? { note: kernel.getPin(drag.over).note, instance: kernel.instance(drag.over) } : outsideAt(drag.at);
+        if (target && target.note !== current) {
+          const point = target.instance && target.instance.toLocal ? target.instance.toLocal(drag.at) : { x: GRID * 4, y: GRID * 5 };
+          reparent(drag.pin, target.note, point);
         }
       }
       drag = null;
@@ -1315,22 +1382,21 @@ export default function (host) {
         return;
       }
 
-      // Cut and paste a box, when no text field wants the keys.
-      if (mod && !isTextField(document.activeElement) && (e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'v')) {
-        if (e.key.toLowerCase() === 'x') {
+      // Cut, copy and paste a box, when no text field wants the keys.
+      //   Cmd+X  cut (the same note, moved)      Cmd+C  copy by reference (the same note, twice)
+      //   Cmd+Shift+C  copy by value (a new note with the same text)     Cmd+V  paste
+      if (mod && !isTextField(document.activeElement) && ['x', 'c', 'v'].includes(e.key.toLowerCase())) {
+        const k = e.key.toLowerCase();
+        if (k === 'x' || k === 'c') {
           const pin = kernel.focus();
           if (!pin) return;
           e.preventDefault();
           const { note, type: type_, width, height } = kernel.getPin(pin);
-          CLIP = { note, type: type_, width, height };
-          kernel.journal.transact('cut', () => kernel.unpin(pin));
+          CLIP = { note, type: type_, width, height, value: k === 'c' && e.shiftKey };
+          if (k === 'x') kernel.journal.transact('cut', () => kernel.unpin(pin));
         } else if (CLIP) {
           e.preventDefault();
-          const { note, type: type_, width, height } = CLIP;
-          CLIP = null;
-          if (!kernel.hasNote(note) || note === current || kernel.contains(note, current)) return console.warn('superflash: cannot move a box there');
-          const p = last || centre();
-          kernel.journal.transact('paste', () => kernel.setFocus(kernel.pin(note, current, type_, { x: snap(p.x), y: snap(p.y), width, height }).id));
+          pasteClip(last || centre());
         }
         return;
       }
