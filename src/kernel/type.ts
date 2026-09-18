@@ -34,14 +34,17 @@ export interface FsClient {
   /** A web page, fetched server-side: its title and readable text. */
   web(url: string): Promise<{ title: string; text: string }>;
   /**
-   * A shell in the repo, started in `cwd` (repo-relative, '' for the root).
-   * Output arrives through `onText` as it happens; `onExit` once, when it dies.
+   * A shell in the repo, started in `cwd` (repo-relative, '' for the root), or
+   * the living shell `id` if it is still there (a reload). The handle says which
+   * id you got; keep it to come back. Output arrives through `onText` as it
+   * happens, scrollback first when reattaching; `onExit` once, when it dies.
    */
   term(
     cwd: string,
     onText: (text: string) => void,
     onExit: (code: number | null) => void,
-  ): Promise<{ write(data: string): void; resize(cols: number, rows: number): void; close(): void }>;
+    id?: string,
+  ): Promise<{ id: string; write(data: string): void; resize(cols: number, rows: number): void; close(): void; kill(): void }>;
 }
 
 /** What a Type looks like from the outside once it is registered. */

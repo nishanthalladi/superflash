@@ -104,10 +104,11 @@ Superflash
 
 ## Terminals
 
-A `terminal` box is a live shell on the bridge. You can type into any of them:
-`POST http://localhost:5173/_term/<id>/in` with `{"data":"text\n"}`. Ids are
-`t1`, `t2`, … in order of opening; an unknown id answers 403, so probe if you
-must. (The id is not yet written into the box's body; that is coming.)
+A `terminal` box is a live shell on the bridge that outlives the box: its id is
+on the box's body as `term: <id>`, and `GET http://localhost:5173/_term` lists
+the living ones. Type into any of them with
+`POST http://localhost:5173/_term/<id>/in` and `{"data":"text\n"}`; an unknown
+id answers 403.
 
 ## Chats
 

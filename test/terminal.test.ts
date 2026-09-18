@@ -72,8 +72,29 @@ describe('terminal: a shell in a box', () => {
     terms[1]!.emit('\x1b[1;32mseed\x1b[0m  src\r\n% ');
     expect(xt.written).toBe('\x1b[1;32mseed\x1b[0m  src\r\n% '); // nothing stripped; the wait line is gone
 
-    instance.unmount!(); // close() on the fake handle exits the shell
-    expect(xt.written).toContain('[exit 0]');
+    // The box wrote its shell's id into the body, so a reload can come back to it.
+    expect(k.body(k.getPin(pin).note)).toBe('Shell\nterm: t2\ncwd: src');
+
+    instance.unmount!(); // detaches; the shell is not told to exit
+    expect(xt.written).not.toContain('[exit');
     expect(xt.disposed).toBe(true);
+  });
+
+  it('a box that names a shell reattaches to it instead of starting another', async () => {
+    const k = new Kernel();
+    const { fs, terms } = fakeFs();
+    k.fs = fs;
+    const root = document.createElement('div');
+    document.body.append(root);
+    const { pin, instance } = mountOne(k, root, 'terminal', terminal);
+    instance.unmount!();
+    k.patch(k.getPin(pin).note, 'Shell\nterm: t9');
+    root.replaceChildren();
+    const fresh = terminal(k.host(pin));
+    fresh.mount(root, k.note(k.getPin(pin).note));
+    await until(() => terms.length === 2);
+    expect(terms[1]!.asked).toBe('t9');
+    expect(opened[1]!.written).toContain('reattaching');
+    expect(k.body(k.getPin(pin).note)).toBe('Shell\nterm: t9');
   });
 });

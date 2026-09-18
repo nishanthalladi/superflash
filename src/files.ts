@@ -71,30 +71,32 @@ export function httpFs(base = ''): FsClient {
       if (!done) throw new Error('claude gave no result');
       return done;
     },
-    async term(cwd, onText, onExit) {
+    async term(cwd, onText, onExit, id) {
       const stop = new AbortController();
       const res = await fetch(`${base}/_term`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ cwd }),
+        body: JSON.stringify({ cwd, id }),
         signal: stop.signal,
       });
       if (!res.ok || !res.body) throw new Error(`${res.status} /_term`);
       return new Promise((resolve, reject) => {
-        let id = '';
+        let got = '';
         each(res, (ev) => {
           if (ev['text']) onText(String(ev['text']));
           if ('done' in ev) onExit(ev['done'] as number | null);
           if (ev['id']) {
-            id = String(ev['id']);
+            got = String(ev['id']);
             resolve({
-              write: (data) => void post(`/_term/${id}/in`, { data }).catch(() => undefined),
-              resize: (cols, rows) => void post(`/_term/${id}/resize`, { cols, rows }).catch(() => undefined),
+              id: got,
+              write: (data) => void post(`/_term/${got}/in`, { data }).catch(() => undefined),
+              resize: (cols, rows) => void post(`/_term/${got}/resize`, { cols, rows }).catch(() => undefined),
               close: () => stop.abort(),
+              kill: () => void post(`/_term/${got}/kill`, {}).catch(() => undefined),
             });
           }
         }).catch((err: unknown) => {
-          if (!id) reject(err instanceof Error ? err : new Error(String(err)));
+          if (!got) reject(err instanceof Error ? err : new Error(String(err)));
         });
       });
     },

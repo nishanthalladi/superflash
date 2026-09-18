@@ -373,11 +373,26 @@ export interface Term {
   id: string;
   write(data: string): void;
   resize(cols: number, rows: number): void;
+  /** Stop watching; the shell stays alive for the next box. */
+  detach(): void;
   kill(): void;
 }
 
-const terms = new Map<string, ChildProcess>();
+interface Shell {
+  child: ChildProcess;
+  /** What the shell has printed lately, replayed to a box that reattaches. */
+  scrollback: string;
+  /** Whoever is watching right now. Zero watchers is fine: the shell lives on. */
+  watchers: Set<(e: TermEvent) => void>;
+  /** When the last watcher left, if none is here. */
+  alone: number | null;
+}
+
+const terms = new Map<string, Shell>();
 let termSeq = 0;
+export const SCROLLBACK = 256 * 1024;
+/** A shell nobody has looked at for this long is killed. ponytail: one sweep, no LRU. */
+export const REAP_MS = 6 * 60 * 60 * 1000;
 
 /**
  * pty.fork + a copy loop, instead of `pty.spawn`: on macOS spawn never notices
@@ -387,7 +402,7 @@ let termSeq = 0;
  * window size, and the kernel tells the shell (SIGWINCH).
  */
 const PTY = [
-  'import fcntl,os,pty,select,struct,sys,termios',
+  'import os,pty,select,sys,fcntl,termios,struct',
   'pid,fd=pty.fork()',
   'if pid==0: os.execvp(sys.argv[1],sys.argv[1:])',
   'while True:',
@@ -395,8 +410,8 @@ const PTY = [
   '  try:',
   '    if fd in r: os.write(1,os.read(fd,65536))',
   '    if 3 in r:',
-  '      s=os.read(3,4096).split()',
-  '      if len(s)>1: fcntl.ioctl(fd,termios.TIOCSWINSZ,struct.pack(\'HHHH\',int(s[-1]),int(s[-2]),0,0))',
+  '      c=os.read(3,4096).decode().split()',
+  '      if len(c)>=2: fcntl.ioctl(fd,termios.TIOCSWINSZ,struct.pack("HHHH",int(c[-1]),int(c[-2]),0,0))',
   '    if 0 in r:',
   '      d=os.read(0,65536)',
   '      if d: os.write(fd,d)',
@@ -409,12 +424,23 @@ const PTY = [
   'sys.exit(os.waitstatus_to_exitcode(st))',
 ].join('\n');
 
+function broadcast(id: string, e: TermEvent): void {
+  const shell = terms.get(id);
+  if (!shell) return;
+  if (e.text) shell.scrollback = (shell.scrollback + e.text).slice(-SCROLLBACK);
+  for (const w of shell.watchers) w(e);
+}
+
 /**
  * A real shell in the repo, as a stream of output. Node has no pty and we take
  * no deps, so python3's stdlib `pty` wraps the shell — it is what `script` is,
  * minus `script`'s insistence on a tty of its own (macOS `script` refuses a
  * pipe). Bytes in go to the pty; bytes out come back through `emit`. Same trust
  * as `/_ask`: dev only, your machine.
+ *
+ * The shell outlives the box: a reload reattaches with `termAttach(id)` and gets
+ * the scrollback back. It dies when it exits, is killed, or sits unwatched for
+ * REAP_MS.
  */
 export async function termOpen(
   root: string,
@@ -430,37 +456,67 @@ export async function termOpen(
     stdio: ['pipe', 'pipe', 'pipe', 'pipe'],
     env: { ...process.env, TERM: 'xterm-256color' },
   });
-  terms.set(id, child);
-  emit({ id });
+  terms.set(id, { child, scrollback: '', watchers: new Set(), alone: null });
   const utf8 = new StringDecoder('utf8'); // a multi-byte char split across chunks stays whole
-  child.stdout!.on('data', (c: Buffer) => emit({ text: utf8.write(c) }));
-  child.stderr!.on('data', (c: Buffer) => emit({ text: c.toString() }));
-  child.on('error', (err) => emit({ text: `! ${err.message}\n` }));
+  child.stdout!.on('data', (c: Buffer) => broadcast(id, { text: utf8.write(c) }));
+  child.stderr!.on('data', (c: Buffer) => broadcast(id, { text: c.toString() }));
+  child.on('error', (err) => broadcast(id, { text: `! ${err.message}\n` }));
   child.on('close', (code) => {
+    broadcast(id, { done: code });
     terms.delete(id);
-    emit({ done: code });
   });
+  return termAttach(id, emit)!;
+}
+
+/** Watch a living shell: its id, its scrollback so far, then everything new. `null` if it is gone. */
+export function termAttach(id: string, emit: (e: TermEvent) => void): Term | null {
+  const shell = terms.get(id);
+  if (!shell) return null;
+  shell.watchers.add(emit);
+  shell.alone = null;
+  emit({ id });
+  if (shell.scrollback) emit({ text: shell.scrollback });
   return {
     id,
-    write: (data) => void child.stdin!.write(data),
+    write: (data) => void shell.child.stdin!.write(data),
     resize: (cols, rows) => termResize(id, cols, rows),
-    kill: () => void child.kill(),
+    detach: () => {
+      shell.watchers.delete(emit);
+      if (!shell.watchers.size) shell.alone = Date.now();
+    },
+    kill: () => void shell.child.kill(),
   };
 }
 
+/** Kill shells nobody has watched for REAP_MS. Called on every open. */
+export function termReap(now = Date.now()): void {
+  for (const shell of terms.values()) {
+    if (shell.alone !== null && now - shell.alone > REAP_MS) shell.child.kill();
+  }
+}
+
 export function termResize(id: unknown, cols: unknown, rows: unknown): void {
-  const child = terms.get(String(id));
-  if (!child) throw new Refused(`no such terminal: ${String(id)}`);
+  const shell = terms.get(String(id));
+  if (!shell) throw new Refused(`no such terminal: ${String(id)}`);
   if (!Number.isInteger(cols) || !Number.isInteger(rows)) throw new Refused('cols and rows must be integers');
-  (child.stdio[3] as NodeJS.WritableStream).write(`${cols as number} ${rows as number}\n`);
+  (shell.child.stdio[3] as NodeJS.WritableStream).write(`${cols as number} ${rows as number}\n`);
 }
 
 export function termWrite(id: unknown, data: unknown): void {
-  const child = terms.get(String(id));
-  if (!child) throw new Refused(`no such terminal: ${String(id)}`);
+  const shell = terms.get(String(id));
+  if (!shell) throw new Refused(`no such terminal: ${String(id)}`);
   if (typeof data !== 'string') throw new Refused('data must be a string');
-  child.stdin!.write(data);
+  shell.child.stdin!.write(data);
 }
+
+export function termKill(id: unknown): void {
+  const shell = terms.get(String(id));
+  if (!shell) throw new Refused(`no such terminal: ${String(id)}`);
+  shell.child.kill();
+}
+
+/** Living shells, for anyone (an agent) who wants to type into one. */
+export const termList = (): string[] => [...terms.keys()];
 
 // --- the plugin ------------------------------------------------------------
 
@@ -526,22 +582,27 @@ export function bridge(options: { root?: string } = {}): Plugin {
             return res.end();
           }
           // --- terminal ---
+          if (url.pathname === '/_term' && req.method === 'GET') return send(200, termList());
           if (url.pathname === '/_term') {
-            const input = (await readBody(req)) as { cwd?: unknown };
+            // `{ id }` reattaches to a living shell (a reload); otherwise, or if it is gone, a new one.
+            const input = (await readBody(req)) as { cwd?: unknown; id?: unknown };
+            termReap();
             res.statusCode = 200;
             res.setHeader('content-type', 'application/x-ndjson');
             res.setHeader('cache-control', 'no-cache');
-            const term = await termOpen(root, input.cwd, (e) => {
+            const emit = (e: TermEvent): void => {
               res.write(`${JSON.stringify(e)}\n`);
               if ('done' in e) res.end();
-            });
-            res.on('close', term.kill); // the box went away: so does the shell
+            };
+            const term = (typeof input.id === 'string' && termAttach(input.id, emit)) || (await termOpen(root, input.cwd, emit));
+            res.on('close', term.detach); // the box went away; the shell did not
             return;
           }
-          const termRoute = /^\/_term\/(\w+)\/(in|resize)$/.exec(url.pathname);
+          const termRoute = /^\/_term\/(\w+)\/(in|resize|kill)$/.exec(url.pathname);
           if (termRoute) {
             const input = (await readBody(req)) as { data?: unknown; cols?: unknown; rows?: unknown };
             if (termRoute[2] === 'in') termWrite(termRoute[1], input.data);
+            else if (termRoute[2] === 'kill') termKill(termRoute[1]);
             else termResize(termRoute[1], input.cols, input.rows);
             return send(200, {});
           }

@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DENY, MAX_BYTES, Refused, git, list, media, read, resolveSafe, termOpen, termWrite, termResize, write } from '../plugins/bridge';
+import { DENY, MAX_BYTES, Refused, git, list, media, read, resolveSafe, termAttach, termList, termOpen, termWrite, termResize, write } from '../plugins/bridge';
 
 let root: string;
 let outside: string;
@@ -157,6 +157,24 @@ describe('terminal', () => {
     for (let i = 0; i < 200 && exit === undefined; i += 1) await new Promise((r) => setTimeout(r, 25));
     expect(exit).toBe(0);
     expect(() => termWrite(term.id, 'x')).toThrow(Refused);
+  });
+
+  it('outlives its box: detach, reattach, and the scrollback comes back', async () => {
+    const first: string[] = [];
+    const term = await termOpen(root, '', (e) => void (e.text && first.push(e.text)), ['sh']);
+    term.write('echo still-$((40+2))\n');
+    for (let i = 0; i < 200 && !first.join('').includes('still-42'); i += 1) await new Promise((r) => setTimeout(r, 25));
+    term.detach();
+    expect(termList()).toContain(term.id);
+
+    const again: string[] = [];
+    const back = termAttach(term.id, (e) => void (e.text && again.push(e.text)));
+    expect(back?.id).toBe(term.id);
+    expect(again.join('')).toContain('still-42'); // replayed, not re-run
+    back!.write('exit\n');
+    for (let i = 0; i < 200 && termList().includes(term.id); i += 1) await new Promise((r) => setTimeout(r, 25));
+    expect(termList()).not.toContain(term.id);
+    expect(termAttach(term.id, () => undefined)).toBeNull();
   });
 
   it('refuses a cwd outside the repo and a non-string keystroke', async () => {

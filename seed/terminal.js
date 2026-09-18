@@ -4,8 +4,10 @@ export const type = { name: 'terminal', title: 'Terminal' };
  * Terminal. A real shell (zsh) in the repo, through the bridge, drawn by xterm —
  * the one library in the app, handed in as `globalThis.superflash.libs.xterm`
  * because a hot-loaded Type cannot import a bare specifier. The body is NOT the
- * transcript — a shell is not a document. Line one is the name; an optional
- * line two `cwd: <repo-relative path>` says where to start.
+ * transcript — a shell is not a document. Line one is the name. Then, in any
+ * order: `term: <id>`, the living shell on the bridge this box shows (written
+ * here by the box, so a reload comes back to the same shell with its scrollback),
+ * and an optional `cwd: <repo-relative path>` for where a new one starts.
  */
 
 const CSS = `
@@ -17,15 +19,27 @@ export default function (host) {
   let xt;
   let handle = null;
   let watch;
+  let gone = false;
 
-  const cwd = () => (/^cwd: (.*)$/.exec(host.read(host.pin.note).split('\n')[1] || '') || [])[1] || '';
+  const head = () => host.read(host.pin.note).split('\n').slice(0, 4);
+  const field = (key) => (head().map((l) => new RegExp(`^${key}: (.*)$`).exec(l)).find(Boolean) || [])[1] || '';
+
+  /** Put `term: <id>` on line two, replacing an old one. */
+  function remember(id) {
+    const lines = host.read(host.pin.note).split('\n');
+    const at = lines.findIndex((l) => l.startsWith('term: '));
+    if (at > 0) lines[at] = `term: ${id}`;
+    else lines.splice(1, 0, `term: ${id}`);
+    host.write(lines.join('\n'));
+  }
 
   async function open() {
     let started = false;
-    xt.write('starting zsh…');
+    const known = field('term').trim();
+    xt.write(known ? 'reattaching…' : 'starting zsh…');
     try {
       handle = await host.fs().term(
-        cwd().trim(),
+        field('cwd').trim(),
         (text) => {
           if (!started) {
             started = true;
@@ -34,7 +48,10 @@ export default function (host) {
           xt.write(text);
         },
         (code) => xt.write(`\r\n[exit ${code}]`),
+        known || undefined,
       );
+      if (gone) return handle.close(); // unmounted while the shell was starting
+      if (handle.id !== known) remember(handle.id);
       handle.resize(xt.cols, xt.rows);
     } catch (err) {
       xt.write(`\r\n! ${err && err.message ? err.message : String(err)}`);
@@ -78,6 +95,8 @@ export default function (host) {
       xt.focus();
     },
     unmount() {
+      // Stop watching; the shell lives on for the next box that names it.
+      gone = true;
       watch.disconnect();
       if (handle) handle.close();
       xt.dispose();

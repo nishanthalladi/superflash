@@ -62,7 +62,7 @@ export function fakeFs(seed: Record<string, string> = {}) {
   const asked: { prompt: string; session?: string }[] = [];
   const media: { name: string; type: string; base64: string }[] = [];
   const fetched: string[] = [];
-  const terms: { cwd: string; typed: string[]; size: number[]; emit: (text: string) => void; exit: (code: number | null) => void }[] = [];
+  const terms: { cwd: string; typed: string[]; size: number[]; emit: (text: string) => void; exit: (code: number | null) => void; asked?: string }[] = [];
   let docFile: string | null = null;
   let docMtime = 0;
   let clock = 1;
@@ -109,11 +109,17 @@ export function fakeFs(seed: Record<string, string> = {}) {
       for (const piece of ['echo: ', prompt]) onText(piece);
       return { session: session ?? 'sess-1', cost: 0.01 };
     },
-    async term(cwd, onText, onExit) {
+    async term(cwd, onText, onExit, id) {
       const typed: string[] = [];
       const size: number[] = [];
-      terms.push({ cwd, typed, size, emit: onText, exit: onExit });
-      return { write: (data) => void typed.push(data), resize: (c, r) => void size.splice(0, 2, c, r), close: () => onExit(0) };
+      terms.push({ cwd, typed, size, emit: onText, exit: onExit, asked: id });
+      return {
+        id: id ?? `t${terms.length}`,
+        write: (data) => void typed.push(data),
+        resize: (c, r) => void size.splice(0, 2, c, r),
+        close: () => undefined,
+        kill: () => onExit(0),
+      };
     },
   };
 
