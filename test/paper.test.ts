@@ -129,7 +129,7 @@ describe('one menu: what do you want here?', () => {
     const labels = [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].map((b) => b.textContent);
     expect(labels).toContain('text');
     expect(labels).toContain('rectangle');
-    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw', 'palette']);
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw']);
 
     [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].find((b) => b.textContent === 'text')!.click();
     const made = k.childPins(desk.id);
@@ -150,7 +150,7 @@ describe('one menu: what do you want here?', () => {
     const pin = k.pin(k.createNote('a').id, desk.id, 'canvas');
     mountCanvas(k, root, desk.id);
     root.querySelector<HTMLElement>('.canvas-plus')!.click();
-    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw', 'palette']);
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw']);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(document.querySelector('.canvas-menu')).toBeNull();
 
@@ -181,11 +181,11 @@ describe('one menu: what do you want here?', () => {
     const { k, desk, root } = setup();
     k.types.define('plain', () => ({ mount() {} }), { title: 'plain' });
     mountCanvas(k, root, desk.id);
-    key('d', { metaKey: true, shiftKey: true }); // the palette has a chord of its own
+    root.querySelector<HTMLElement>('.canvas-plus')!.click();
     const menu = document.querySelector('.canvas-menu')!;
     expect(menu.querySelector('.canvas-menu-search')).not.toBeNull();
     const buttons = [...menu.querySelectorAll<HTMLElement>('button')];
-    expect(buttons.length).toBe(k.types.list().filter((t) => t.lens !== false).length + 7); // six draws and the palette's own row
+    expect(buttons.length).toBe(k.types.list().filter((t) => t.lens !== false).length + 7); // six draws and drawing mode
     for (const b of buttons) expect(b.querySelector('svg')).not.toBeNull();
     const rect = buttons.find((b) => b.textContent === 'rectangle')!;
     const hint = rect.querySelector<HTMLElement>('.canvas-menu-key')!;
@@ -234,5 +234,29 @@ describe('one menu: what do you want here?', () => {
     key('r');
     drag(viewport, [0, 0], [50, 50]);
     expect(scene(k.body(desk.id)).elements[0].strokeWidth).toBe(4);
+  });
+});
+
+describe('drawing mode', () => {
+  it('cmd+shift+d shows the tray with the cursor; Escape puts it away; a tool key opens it too', () => {
+    const { k, desk, root } = setup();
+    mountCanvas(k, root, desk.id);
+    document.body.classList.remove('drawing'); // earlier tests may have left the tray out
+    k.setFocus(null);
+    key('v');
+    expect(document.body.classList.contains('drawing')).toBe(false);
+    key('d', { metaKey: true, shiftKey: true });
+    expect(document.body.classList.contains('drawing')).toBe(true);
+    expect(document.body.dataset['tool']).toBe('select');
+    key('Escape');
+    expect(document.body.classList.contains('drawing')).toBe(false);
+    k.setFocus(null);
+    key('r');
+    expect(document.body.classList.contains('drawing')).toBe(true);
+    key('Escape'); // back to the cursor, tray still out
+    expect(document.body.dataset['tool']).toBe('select');
+    expect(document.body.classList.contains('drawing')).toBe(true);
+    key('Escape'); // and away
+    expect(document.body.classList.contains('drawing')).toBe(false);
   });
 });

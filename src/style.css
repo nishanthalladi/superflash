@@ -910,11 +910,11 @@ body[data-tool='text'] .canvas-inside {
 }
 
 /* Drawing: the + steps aside for the tray until you pick the cursor again. */
-body:not([data-tool='select']) .canvas-plus {
+body.drawing .canvas-plus {
   display: none;
 }
 
-body[data-tool='select'] .canvas-tools {
+body:not(.drawing) .canvas-tools {
   display: none;
 }
 

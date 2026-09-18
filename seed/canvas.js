@@ -81,16 +81,22 @@ let TOOL = 'select';
 /** The selected ink element, whichever canvas it is on: `{ del(), clear() }`. */
 let SEL = null;
 
+/** Drawing mode: the tray is out. Picking a tool opens it; Escape (or the cursor, twice) puts it away. */
+function setDrawing(on) {
+  document.body.classList.toggle('drawing', on);
+}
+
 function setTool(name) {
   TOOL = name;
   document.body.dataset.tool = name;
+  if (name !== 'select') setDrawing(true);
   for (const b of document.querySelectorAll('.canvas-tools button')) b.classList.toggle('on', b.dataset.tool === name);
 }
 
 // --- settings: a note in the document, so an agent can rebind by editing text ---
 
 const SETTINGS = 'superflash:settings';
-const DEFAULT_KEYS = { palette: 'cmd+shift+d', select: 'v', rectangle: 'r', ellipse: 'o', arrow: 'a', line: 'l', pen: 'p', text: 't', eraser: 'e' };
+const DEFAULT_KEYS = { draw: 'cmd+shift+d', select: 'v', rectangle: 'r', ellipse: 'o', arrow: 'a', line: 'l', pen: 'p', text: 't', eraser: 'e' };
 const STROKES = [1, 2, 4];
 /** Shared by every canvas on screen, like TOOL. */
 let KEYS = { ...DEFAULT_KEYS };
@@ -768,8 +774,8 @@ export default function (host) {
       bind: `add:${t.name}`,
       on: () => place(point, t.name, t.name === 'canvas' ? '' : '\n'),
     }));
-    const self = { group: 'palette', label: 'this menu', icon: ICONS.keys, key: KEYS.palette, bind: 'palette', on: () => undefined };
-    menu(x, y, [...add, ...draw, self], true);
+    const mode = { group: 'draw', label: 'drawing mode', icon: ICONS.keys, key: KEYS.draw, bind: 'draw', on: () => fire('draw', new Event('x')) };
+    menu(x, y, [...add, ...draw, mode], true);
   }
 
   /** A box's bar: how to look at it, and what to do with it. */
@@ -1172,9 +1178,11 @@ export default function (host) {
     const bound = Object.keys(KEYS).find((k) => KEYS[k] && KEYS[k] === name);
     if (!bound) return false;
     e.preventDefault();
-    if (bound === 'palette') {
-      const r = viewport.getBoundingClientRect();
-      paperMenu(r.left + r.width / 2 - 120, r.top + r.height / 2 - 180, last || centre());
+    if (bound === 'draw') {
+      // Drawing mode, cursor in hand: the tray is out and letters pick a tool.
+      const open = document.body.classList.contains('drawing');
+      setTool('select');
+      setDrawing(!open);
     } else if (bound.startsWith('add:')) {
       const t = bound.slice(4);
       if (kernel.types.has(t)) place(last || centre(), t, t === 'canvas' ? '' : '\n');
@@ -1220,6 +1228,10 @@ export default function (host) {
       if (e.key === 'Escape') {
         if (TOOL !== 'select') {
           setTool('select');
+          return;
+        }
+        if (document.body.classList.contains('drawing')) {
+          setDrawing(false);
           return;
         }
         if (isTextField(document.activeElement)) document.activeElement.blur();
