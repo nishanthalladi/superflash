@@ -72,11 +72,11 @@ export default function (host) {
       const cover = document.createElement('label');
       cover.className = 'text-task';
       cover.style.top = `${top + i * line - text.scrollTop}px`;
-      // Cover exactly the `- [ ] ` prefix, wherever this font puts its right edge.
-      cover.style.left = `${left + textWidth(cs.font, m[1])}px`;
-      cover.style.width = `${textWidth(cs.font, m[0]) - textWidth(cs.font, m[1])}px`;
-      cover.style.justifyContent = 'flex-start';
-      cover.style.paddingLeft = `${textWidth(cs.font, '- ')}px`;
+      // Cover only the `[ ]`, measured in this font; the dash stays as a bullet
+      // and the text after is never touched even if the measure is a hair off.
+      const before = textWidth(cs.font, `${m[1]}- `);
+      cover.style.left = `${left + before - 1}px`;
+      cover.style.width = `${textWidth(cs.font, `${m[1]}- [${m[2]}]`) - before + 2}px`;
       cover.style.height = `${line}px`;
       const box = document.createElement('input');
       box.type = 'checkbox';

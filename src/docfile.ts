@@ -116,6 +116,12 @@ export function syncDoc(kernel: Kernel, fs: FsClient, options: DocSyncOptions = 
   const push = (): void => {
     const text = `${JSON.stringify(forDisk(kernel.toJSON()), null, 2)}\n`;
     if (text === last) return;
+    // Never shrink the notebook on disk to nothing: a boot that lost its way
+    // (a bad parse, a stray fresh) must not erase what another tab wrote.
+    if (last && kernel.allPins().filter((p) => filePath(p.note) === null).length < 2 && JSON.parse(last).pins.length > 4) {
+      onError(new Error('refusing to write a near-empty document over a full one'));
+      return;
+    }
     last = text;
     writing = writing
       .then(async () => {

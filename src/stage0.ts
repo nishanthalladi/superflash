@@ -92,9 +92,11 @@ export async function stage0(root: HTMLElement, store: Store, options: Stage0Opt
   kernel.load(stored ?? seedDoc());
 
   // Disk wins for the document too: if the repo has one, it is what you see.
+  // `fresh` throws away what this *browser* stored, never what the repo holds —
+  // a second browser booting fresh must not push the seed over your notebook.
   const client = options.fs === undefined ? httpFs() : options.fs;
   const bridged = client !== null && (await reachable(client));
-  if (bridged && !options.fresh) {
+  if (bridged) {
     const onDisk = await client!.readDoc().catch(() => ({ body: null }));
     if (onDisk.body) {
       try {

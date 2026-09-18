@@ -104,3 +104,18 @@ describe('place: layout without arithmetic', () => {
     expect(placed(kernel, { ...base, place: 'below pin_nope' })).toMatchObject({ x: 0, y: 0, parent: 'wrong' });
   });
 });
+
+describe('fresh does not clobber the repo', () => {
+  it('a fresh boot in a second browser still reads the document on disk', async () => {
+    const repo = fakeFs();
+    const first = await stage0(host(), memoryStore(), { fs: repo.fs });
+    first.kernel.createNote('mine', 'note_mine');
+    await first.doc!.flush();
+    first.doc!.stop();
+
+    const second = await stage0(host(), memoryStore(), { fs: repo.fs, fresh: true });
+    expect(second.kernel.hasNote('note_mine')).toBe(true);
+    await second.doc!.flush();
+    expect((JSON.parse(repo.doc()!) as Doc).notes.some((n) => n.id === 'note_mine')).toBe(true);
+  });
+});
