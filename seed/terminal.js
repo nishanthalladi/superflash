@@ -1,4 +1,8 @@
-export const type = { name: 'terminal', title: 'Terminal' };
+export const type = {
+  name: 'terminal',
+  title: 'Terminal',
+  icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4 L7 8 L3 12 M8 12 H13"/></svg>',
+};
 
 /**
  * Terminal. A real shell (zsh) in the repo, through the bridge, drawn by xterm —

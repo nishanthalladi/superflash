@@ -1,4 +1,8 @@
-export const type = { name: 'image', title: 'Image' };
+export const type = {
+  name: 'image',
+  title: 'Image',
+  icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="M3 12 L6.5 8 L9 10.5 L11 8.5 L13 11"/><circle cx="10.5" cy="5.5" r="1" fill="currentColor" stroke="none"/></svg>',
+};
 
 /**
  * Image. The body is text, the picture is a file in the repo:

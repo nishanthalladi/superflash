@@ -270,13 +270,15 @@ body {
   font-style: italic;
 }
 
-/* Right-click on a bar: which Type draws this. Small, at the pointer, gone on a click. */
+/* The one menu: right-click on paper or a bar, the +, Cmd+K. A small palette. */
 .canvas-menu {
   position: fixed;
   z-index: 10;
   display: flex;
   flex-direction: column;
-  min-width: 120px;
+  min-width: 220px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
   padding: 4px;
   border: 1px solid var(--edge);
   border-radius: 8px;
@@ -284,24 +286,63 @@ body {
   box-shadow: var(--shadow);
 }
 
-.canvas-menu button {
+.canvas-menu-search {
+  margin: 2px 2px 4px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: 4px;
-  padding: 5px 10px;
+  border-bottom: 1px solid var(--edge);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.canvas-menu-search::placeholder {
+  color: var(--dim);
+}
+
+.canvas-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 5px;
+  padding: 5px 8px;
   text-align: left;
   background: transparent;
   color: var(--ink);
   font: inherit;
   font-size: 14px;
+  line-height: 1.2;
   cursor: pointer;
 }
 
-.canvas-menu button:hover {
+.canvas-menu button > svg {
+  flex: 0 0 16px;
+  color: var(--ink-2);
+}
+
+.canvas-menu button > span {
+  flex: 1;
+}
+
+/* The shortcut, from `data-key`; nothing when there is none. */
+.canvas-menu button::after {
+  content: attr(data-key);
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.canvas-menu button:hover,
+.canvas-menu button.hi {
   background: var(--paper-2);
 }
 
 .canvas-menu button.chosen {
-  color: var(--dim);
+  box-shadow: inset 2px 0 0 var(--gold);
 }
 
 /* The handle: drag from here, since the name beside it takes a caret. */
@@ -880,6 +921,8 @@ body[data-tool='select'] .canvas-tools {
 }
 
 .canvas-tools button {
+  display: grid;
+  place-items: center;
   width: 26px;
   height: 26px;
   border: 0;
@@ -897,4 +940,49 @@ body[data-tool='select'] .canvas-tools {
 
 .canvas-tools button.on {
   background: var(--gold);
+}
+
+/* Stroke width: three dots, below the tools. */
+.canvas-stroke {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid var(--edge);
+}
+
+.canvas-stroke button {
+  display: grid;
+  place-items: center;
+}
+
+.canvas-stroke i {
+  display: block;
+  border-radius: 50%;
+  background: var(--ink-2);
+}
+
+.canvas-stroke button.on {
+  background: var(--paper-2);
+}
+
+.canvas-stroke button.on i {
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+.canvas-stroke [data-w='1'] i {
+  width: 4px;
+  height: 4px;
+}
+
+.canvas-stroke [data-w='2'] i {
+  width: 7px;
+  height: 7px;
+}
+
+.canvas-stroke [data-w='4'] i {
+  width: 11px;
+  height: 11px;
 }

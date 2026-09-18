@@ -1,4 +1,8 @@
-export const type = { name: 'web', title: 'Web' };
+export const type = {
+  name: 'web',
+  title: 'Web',
+  icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M2.5 8 H13.5 M8 2.5 C5.5 5.5 5.5 10.5 8 13.5 C10.5 10.5 10.5 5.5 8 2.5"/></svg>',
+};
 
 /**
  * Web. A note whose body is a URL:

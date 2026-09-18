@@ -1,4 +1,8 @@
-export const type = { name: 'chat', title: 'Chat' };
+export const type = {
+  name: 'chat',
+  title: 'Chat',
+  icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3.5 H13 V10.5 H7 L4 13 V10.5 H3 Z"/></svg>',
+};
 
 /**
  * The door. A conversation with Claude Code, in this repo, as a note.

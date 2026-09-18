@@ -1,4 +1,8 @@
-export const type = { name: 'canvas', title: 'Canvas' };
+export const type = {
+  name: 'canvas',
+  title: 'Canvas',
+  icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><rect x="6" y="6" width="4" height="4" rx="0.5"/></svg>',
+};
 
 /**
  * A canvas. Boxes on a surface, and nothing else: a canvas never turns into
@@ -26,8 +30,11 @@ export const type = { name: 'canvas', title: 'Canvas' };
  * is an Excalidraw scene, `{"type":"excalidraw","version":2,"elements":[...]}`,
  * in the same coordinates as the pins, drawn as crisp SVG under the boxes. The
  * toolbar (outermost only; nested canvases use the same tool) is V select,
- * R rectangle, O ellipse, A arrow, L line, P pen, T text, E eraser. One gesture
- * is one write and one undo step. No style panel yet: ink stroke, no fill.
+ * R rectangle, O ellipse, A arrow, L line, P pen, T text, E eraser by default;
+ * the keys, and the stroke width (1, 2, 4), are in the `superflash:settings`
+ * note, made on first boot, so editing them is editing text. Right-click the
+ * paper, the + or Cmd+K opens the palette: search, Enter, arrows. One gesture
+ * is one write and one undo step. Ink stroke only, no fill.
  *
  * A canvas inside a canvas is the same code with `depth > 0`: it has its own
  * camera, and while the pointer is over it you are in that world — wheel, drag,
@@ -50,9 +57,24 @@ const nameOf = (body) => body.split('\n')[0] || '';
 // --- ink: the paper is an Excalidraw scene ----------------------------------
 
 const NS = 'http://www.w3.org/2000/svg';
+/** Crisp 16px single-colour icons: stroke 1.5, currentColor. */
+const ico = (d) => `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const DOT = ico('<circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none"/>');
+const ICONS = {
+  inside: ico('<path d="M2 8 H9 M6.5 5 L9.5 8 L6.5 11 M11 3 H14 V13 H11"/>'),
+  duplicate: ico('<rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M2.5 10.5 V3.5 A1 1 0 0 1 3.5 2.5 H10.5"/>'),
+  delete: ico('<path d="M4 4 L12 12 M12 4 L4 12"/>'),
+  keys: ico('<rect x="1.5" y="4.5" width="13" height="7" rx="1.5"/><path d="M4 7 H4.5 M7 7 H7.5 M10 7 H10.5 M5 9.5 H11"/>'),
+};
 const TOOLS = [
-  ['select', 'v', '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M3 2 L13 8 L8.5 9 L11 13.5 L9.5 14.2 L7 9.8 L3.5 13 Z" fill="currentColor"/></svg>'], ['rectangle', 'r', '▢'], ['ellipse', 'o', '◯'], ['arrow', 'a', '→'],
-  ['line', 'l', '─'], ['pen', 'p', '✎'], ['text', 't', 'T'], ['eraser', 'e', '⌫'],
+  ['select', ico('<path d="M3 2 L13 8 L8.5 9 L11 13.5 L9.5 14.2 L7 9.8 L3.5 13 Z" fill="currentColor" stroke="none"/>')],
+  ['rectangle', ico('<rect x="2.5" y="3.5" width="11" height="9" rx="1.5"/>')],
+  ['ellipse', ico('<ellipse cx="8" cy="8" rx="5.5" ry="4.5"/>')],
+  ['arrow', ico('<path d="M3 13 L13 3 M7 3 H13 V9"/>')],
+  ['line', ico('<path d="M3 13 L13 3"/>')],
+  ['pen', ico('<path d="M3 13 L4 10 L11 3 L13 5 L6 12 Z"/>')],
+  ['text', ico('<path d="M4 3.5 H12 M8 3.5 V13 M6 13 H10"/>')],
+  ['eraser', ico('<path d="M6 13 L2.5 9.5 L9 3 L13.5 7.5 L8 13 Z M6 13 H13.5"/>')],
 ];
 /** One tool for every canvas on screen; nested canvases draw with it too. */
 let TOOL = 'select';
@@ -63,6 +85,52 @@ function setTool(name) {
   TOOL = name;
   document.body.dataset.tool = name;
   for (const b of document.querySelectorAll('.canvas-tools button')) b.classList.toggle('on', b.dataset.tool === name);
+}
+
+// --- settings: a note in the document, so an agent can rebind by editing text ---
+
+const SETTINGS = 'superflash:settings';
+const DEFAULT_KEYS = { select: 'v', rectangle: 'r', ellipse: 'o', arrow: 'a', line: 'l', pen: 'p', text: 't', eraser: 'e' };
+const STROKES = [1, 2, 4];
+/** Shared by every canvas on screen, like TOOL. */
+let KEYS = { ...DEFAULT_KEYS };
+let STROKE = 2;
+
+const settingsBody = (s) => `Settings\n\n${JSON.stringify(s)}`;
+
+/** The JSON after the name, or `{}` when it does not parse. */
+function settings(kernel) {
+  try {
+    const b = kernel.hasNote(SETTINGS) ? kernel.body(SETTINGS) : '';
+    const s = JSON.parse(b.slice(b.indexOf('\n\n') + 2));
+    return s && typeof s === 'object' ? s : {};
+  } catch {
+    return {};
+  }
+}
+
+function readSettings(kernel) {
+  const s = settings(kernel);
+  KEYS = { ...DEFAULT_KEYS, ...(s.keys && typeof s.keys === 'object' ? s.keys : {}) };
+  STROKE = STROKES.includes(s.stroke) ? s.stroke : 2;
+  for (const b of document.querySelectorAll('.canvas-stroke button')) b.classList.toggle('on', Number(b.dataset.w) === STROKE);
+}
+
+function setStroke(kernel, w) {
+  STROKE = w;
+  for (const b of document.querySelectorAll('.canvas-stroke button')) b.classList.toggle('on', Number(b.dataset.w) === w);
+  if (kernel.hasNote(SETTINGS)) kernel.journal.transact('settings', () => kernel.patch(SETTINGS, settingsBody({ ...settings(kernel), stroke: w })));
+}
+
+/** `r`, `shift+r`: what a keydown is called in the settings. */
+const keyName = (e) => (e.shiftKey ? 'shift+' : '') + e.key.toLowerCase();
+/** What the menu shows on the right: `R`, `⇧R`. */
+const keyHint = (k) => (k || '').replace('shift+', '⇧').toUpperCase();
+/** Characters in order, anywhere: "cha" finds "chat", "rct" finds "rectangle". */
+function fuzzy(q, s) {
+  let i = 0;
+  for (const ch of s.toLowerCase()) if (ch === q[i]) i += 1;
+  return i === q.length;
 }
 
 /** The scene after the name, or null when the body holds none. */
@@ -82,7 +150,7 @@ function shape(type, x, y) {
   return {
     id: inkId(), type, x, y, width: 0, height: 0, angle: 0,
     strokeColor: inkColor(), backgroundColor: 'transparent', fillStyle: 'solid',
-    strokeWidth: 2, strokeStyle: 'solid', roughness: 0, opacity: 100,
+    strokeWidth: STROKE, strokeStyle: 'solid', roughness: 0, opacity: 100,
     roundness: type === 'rectangle' ? { type: 3 } : null, isDeleted: false,
     ...(type === 'line' || type === 'arrow' ? { points: [[0, 0], [0, 0]], startArrowhead: null, endArrowhead: type === 'arrow' ? 'arrow' : null } : {}),
     ...(type === 'freedraw' ? { points: [[0, 0]], pressures: [], simulatePressure: true } : {}),
@@ -543,15 +611,27 @@ export default function (host) {
   const lenses = () => kernel.types.list().filter((t) => t.lens !== false);
 
   /**
-   * The one menu. `items` is a list of `{ label, on, chosen?, group? }`; a new
-   * `group` starts a section. Anything outside closes it and does nothing else.
+   * The one menu. `items` is a list of `{ label, on, icon?, key?, chosen?, group? }`;
+   * a new `group` starts a section. With `search`, a field on top filters the
+   * list as you type (characters in order); Enter runs the highlighted row,
+   * arrows move it. Anything outside closes it and does nothing else.
    */
-  function menu(x, y, items) {
+  function menu(x, y, items, search = false) {
     closeMenu();
     const el = document.createElement('div');
     el.className = 'canvas-menu';
-    el.style.left = `${Math.min(x, innerWidth - 180)}px`;
-    el.style.top = `${Math.min(y, innerHeight - 24 * items.length - 40)}px`;
+    el.style.left = `${Math.max(0, Math.min(x, innerWidth - 240))}px`;
+    el.style.top = `${Math.max(0, Math.min(y, innerHeight - 28 * items.length - 60))}px`;
+    let field;
+    if (search) {
+      field = document.createElement('input');
+      field.className = 'canvas-menu-search';
+      field.placeholder = 'search…';
+      field.spellcheck = false;
+      el.append(field);
+    }
+    const heads = [];
+    const rows = [];
     let group;
     for (const item of items) {
       if (item.group && item.group !== group) {
@@ -559,26 +639,65 @@ export default function (host) {
         const h = document.createElement('div');
         h.className = 'canvas-menu-group';
         h.textContent = group;
+        h.dataset.group = group;
         el.append(h);
+        heads.push(h);
       }
       const b = document.createElement('button');
-      b.textContent = item.label;
+      b.innerHTML = item.icon || DOT;
+      const label = document.createElement('span');
+      label.textContent = item.label;
+      b.append(label);
+      // The hint lives in CSS (`attr(data-key)`), so the button's text is just the label.
+      b.dataset.key = keyHint(item.key);
+      b.dataset.group = item.group || '';
       b.classList.toggle('chosen', !!item.chosen);
       b.onclick = () => {
         closeMenu();
         item.on();
       };
       el.append(b);
+      rows.push(b);
     }
     document.body.append(el);
+    let hi = 0;
+    const shown = () => rows.filter((b) => !b.hidden);
+    const light = () => shown().forEach((b, i) => b.classList.toggle('hi', search && i === hi));
+    if (field) {
+      field.oninput = () => {
+        const q = field.value.trim().toLowerCase();
+        for (const b of rows) b.hidden = !fuzzy(q, b.textContent);
+        for (const h of heads) h.hidden = !rows.some((b) => !b.hidden && b.dataset.group === h.dataset.group);
+        hi = 0;
+        light();
+      };
+      field.onkeydown = (e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          const n = shown().length;
+          hi = (hi + (e.key === 'ArrowDown' ? 1 : n - 1)) % (n || 1);
+          light();
+        } else if (e.key === 'Enter') shown()[hi]?.click();
+        else return;
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      light();
+      field.focus();
+    }
     // Anything outside the menu closes it, without doing what was clicked.
     const away = (e) => {
+      if (!el.isConnected) return el.close();
       if (el.contains(e.target)) return;
       e.stopPropagation();
       e.preventDefault();
       closeMenu();
     };
-    const esc = (e) => e.key === 'Escape' && closeMenu();
+    const esc = (e) => {
+      if (e.key !== 'Escape') return;
+      // Ours alone: closing the palette must not also step out of the note.
+      e.stopImmediatePropagation();
+      closeMenu();
+    };
     window.addEventListener('pointerdown', away, { capture: true, signal: stop.signal });
     window.addEventListener('keydown', esc, { capture: true, signal: stop.signal });
     el.close = () => {
@@ -594,18 +713,23 @@ export default function (host) {
 
   /** "What do you want here?" — draw something, or place a box. Right-click on paper, or the +. */
   function paperMenu(x, y, point) {
-    const draw = TOOLS.filter(([name]) => name !== 'select' && name !== 'eraser').map(([name]) => ({
+    const draw = TOOLS.filter(([name]) => name !== 'select' && name !== 'eraser').map(([name, icon]) => ({
       group: 'draw',
       label: name,
+      icon,
+      key: KEYS[name],
       chosen: TOOL === name,
       on: () => setTool(name),
     }));
-    const put = lenses().map((t) => ({
-      group: 'place',
+    const add = lenses().map((t) => ({
+      group: 'add',
       label: t.title,
+      icon: t.icon,
+      key: KEYS[`add:${t.name}`],
       on: () => place(point, t.name, t.name === 'canvas' ? '' : '\n'),
     }));
-    menu(x, y, [...put, ...draw]);
+    const keys = { group: 'settings', label: 'shortcuts', icon: ICONS.keys, on: () => reveal(SETTINGS, 'text', [360, 200]) };
+    menu(x, y, [...add, ...draw, keys], true);
   }
 
   /** A box's bar: how to look at it, and what to do with it. */
@@ -614,14 +738,15 @@ export default function (host) {
     const look = lenses().map((t) => ({
       group: 'look at as',
       label: t.title,
+      icon: t.icon,
       chosen: t.name === pin.type,
       on: () => retype(pinId, t.name),
     }));
     menu(x, y, [
       ...look,
-      { group: 'box', label: 'go inside', on: () => enter(pin.note) },
-      { group: 'box', label: 'duplicate', on: () => duplicate(pinId) },
-      { group: 'box', label: 'delete', on: () => kernel.unpin(pinId) },
+      { group: 'box', label: 'go inside', icon: ICONS.inside, on: () => enter(pin.note) },
+      { group: 'box', label: 'duplicate', icon: ICONS.duplicate, on: () => duplicate(pinId) },
+      { group: 'box', label: 'delete', icon: ICONS.delete, on: () => kernel.unpin(pinId) },
     ]);
   }
 
@@ -975,6 +1100,7 @@ export default function (host) {
         lenses().map((t) => ({
           group: 'look at as',
           label: t.title,
+          icon: t.icon,
           chosen: (views.get(current) || 'canvas') === t.name,
           on: () => setView(t.name),
         })),
@@ -1030,6 +1156,14 @@ export default function (host) {
         return;
       }
 
+      // Cmd+K: the palette, mid-viewport, like the +.
+      if (mod && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const r = viewport.getBoundingClientRect();
+        paperMenu(r.left + r.width / 2 - 120, r.top + r.height / 2 - 180, centre());
+        return;
+      }
+
       // Escape steps out one layer at a time: out of the text, out of the
       // selection, out of the note. So Delete has something to delete.
       if (e.key === 'Escape') {
@@ -1063,11 +1197,15 @@ export default function (host) {
 
       if (mod || e.altKey || e.key.length !== 1) return;
 
-      // A letter alone picks a tool.
-      const tool = TOOLS.find((t) => t[1] === e.key);
-      if (tool) {
+      // A letter alone picks a tool, or adds a box, as the settings note says.
+      const name = keyName(e);
+      const bound = Object.keys(KEYS).find((k) => KEYS[k] && KEYS[k] === name);
+      if (bound) {
         e.preventDefault();
-        setTool(tool[0]);
+        if (bound.startsWith('add:')) {
+          const t = bound.slice(4);
+          if (kernel.types.has(t)) place(last || centre(), t, t === 'canvas' ? '' : '\n');
+        } else setTool(bound);
         return;
       }
 
@@ -1082,7 +1220,15 @@ export default function (host) {
     mount(el) {
       root = el;
       root.classList.add(outer ? 'canvas' : 'canvas-nest');
-      if (outer) loadView();
+      if (outer) {
+        loadView();
+        // Shortcuts and stroke live in the document, as a note anyone can edit.
+        if (!kernel.hasNote(SETTINGS)) {
+          const keys = { ...DEFAULT_KEYS, ...Object.fromEntries(lenses().map((t) => [`add:${t.name}`, ''])) };
+          kernel.journal.transact('settings', () => kernel.createNote(settingsBody({ keys, stroke: 2 }), SETTINGS));
+        }
+        readSettings(kernel);
+      }
 
       if (outer) {
         head = document.createElement('input');
@@ -1131,12 +1277,11 @@ export default function (host) {
         // The tray only shows while a drawing tool is active; the + is how you start.
         const tools = document.createElement('div');
         tools.className = 'canvas-tools';
-        for (const [name, key, glyph] of TOOLS) {
+        for (const [name, icon] of TOOLS) {
           const b = document.createElement('button');
           b.dataset.tool = name;
-          if (glyph.startsWith('<svg')) b.innerHTML = glyph;
-          else b.textContent = glyph;
-          b.title = `${name} (${key.toUpperCase()})`;
+          b.innerHTML = icon;
+          b.title = `${name} (${keyHint(KEYS[name])})`;
           b.classList.toggle('on', name === TOOL);
           on(b, 'click', () => {
             setTool(name);
@@ -1144,6 +1289,22 @@ export default function (host) {
           });
           tools.append(b);
         }
+        // Stroke width: three dots, the chosen one gold.
+        const stroke = document.createElement('div');
+        stroke.className = 'canvas-stroke';
+        for (const w of STROKES) {
+          const b = document.createElement('button');
+          b.dataset.w = w;
+          b.title = `stroke ${w}`;
+          b.append(document.createElement('i'));
+          b.classList.toggle('on', w === STROKE);
+          on(b, 'click', () => {
+            setStroke(kernel, w);
+            b.blur();
+          });
+          stroke.append(b);
+        }
+        tools.append(stroke);
         stage.append(tools);
         document.body.dataset.tool = TOOL;
       }
@@ -1152,6 +1313,7 @@ export default function (host) {
       unwatch.push(
         kernel.watch((c) => {
           if (c.kind === 'patch') {
+            if (c.note === SETTINGS) readSettings(kernel);
             if (c.note === current) {
               drawName();
               drawInk();

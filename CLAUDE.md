@@ -102,6 +102,22 @@ Superflash
 - A label is a `text` element: `text`, `fontSize`, `fontFamily: 2`.
 - A pen stroke is `freedraw` with many `points`. Keep `roughness: 0`.
 
+## Shortcuts and stroke
+
+Keys live in the document too: the note with id `superflash:settings`, body
+`Settings`, a blank line, then JSON:
+
+```
+{"keys":{"select":"v","rectangle":"r","ellipse":"o","arrow":"a","line":"l",
+ "pen":"p","text":"t","eraser":"e","add:chat":"","add:terminal":""},"stroke":2}
+```
+
+A key is one character or `shift+x`; `add:<type>` drops a box of that Type
+where the pointer is. `stroke` is the ink width (1, 2 or 4). Edit the note and
+the canvas re-reads it; the app makes it on first boot if it is missing. The
+palette (right-click the paper, `+`, or Cmd+K) has a "shortcuts" item that
+pins it as a text box.
+
 ## Terminals
 
 A `terminal` box is a live shell on the bridge that outlives the box: its id is

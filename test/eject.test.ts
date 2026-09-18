@@ -42,7 +42,8 @@ describe('eject', () => {
     const before = kernel.toJSON();
 
     const rebuilt = rehydrate(eject(kernel));
-    expect(rebuilt).toEqual(seedDoc());
+    // The canvas makes the settings note on first boot; the seed has none.
+    expect({ ...rebuilt, notes: rebuilt.notes.filter((n) => n.id !== 'superflash:settings') }).toEqual(seedDoc());
 
     const root = host();
     const second = await stage0(root, memoryStore(), { fresh: true, fs: null });

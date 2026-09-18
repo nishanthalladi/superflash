@@ -129,7 +129,7 @@ describe('one menu: what do you want here?', () => {
     const labels = [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].map((b) => b.textContent);
     expect(labels).toContain('text');
     expect(labels).toContain('rectangle');
-    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['place', 'draw']);
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw', 'settings']);
 
     [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].find((b) => b.textContent === 'text')!.click();
     const made = k.childPins(desk.id);
@@ -150,7 +150,7 @@ describe('one menu: what do you want here?', () => {
     const pin = k.pin(k.createNote('a').id, desk.id, 'canvas');
     mountCanvas(k, root, desk.id);
     root.querySelector<HTMLElement>('.canvas-plus')!.click();
-    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['place', 'draw']);
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw', 'settings']);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(document.querySelector('.canvas-menu')).toBeNull();
 
@@ -159,5 +159,61 @@ describe('one menu: what do you want here?', () => {
     expect(labels).toEqual(expect.arrayContaining(['canvas', 'text', 'go inside', 'duplicate', 'delete']));
     [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].find((b) => b.textContent === 'delete')!.click();
     expect(k.hasPin(pin.id)).toBe(false);
+  });
+
+  it('the palette searches: "cha" + Enter adds the first match, a chat', () => {
+    const { k, desk, root } = setup();
+    k.types.define('chat', () => ({ mount() {} }), { title: 'chat' });
+    mountCanvas(k, root, desk.id);
+    root.querySelector<HTMLElement>('.canvas-plus')!.click();
+    const field = document.querySelector<HTMLInputElement>('.canvas-menu-search')!;
+    expect(document.activeElement).toBe(field);
+    field.value = 'cha';
+    field.dispatchEvent(new Event('input'));
+    const shown = [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].filter((b) => !b.hidden);
+    expect(shown.map((b) => b.textContent)).toEqual(['chat']);
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(k.childPins(desk.id).map((p) => p.type)).toEqual(['chat']);
+    expect(document.querySelector('.canvas-menu')).toBeNull();
+  });
+
+  it('Cmd+K opens the palette; every lens shows an icon and its shortcut', () => {
+    const { k, desk, root } = setup();
+    k.types.define('plain', () => ({ mount() {} }), { title: 'plain' });
+    mountCanvas(k, root, desk.id);
+    key('k', { metaKey: true });
+    const menu = document.querySelector('.canvas-menu')!;
+    expect(menu.querySelector('.canvas-menu-search')).not.toBeNull();
+    const buttons = [...menu.querySelectorAll<HTMLElement>('button')];
+    expect(buttons.length).toBe(k.types.list().filter((t) => t.lens !== false).length + 7); // six draws and "shortcuts"
+    for (const b of buttons) expect(b.querySelector('svg')).not.toBeNull();
+    expect(buttons.find((b) => b.textContent === 'rectangle')!.dataset['key']).toBe('R');
+    key('Escape');
+    expect(document.querySelector('.canvas-menu')).toBeNull();
+  });
+
+  it('shortcuts live in the settings note: rebind rectangle to q by editing it', () => {
+    const { k, desk } = setup();
+    const settings = k.body('superflash:settings');
+    expect(settings.startsWith('Settings\n\n')).toBe(true);
+    expect(JSON.parse(settings.slice(settings.indexOf('\n\n') + 2)).keys).toMatchObject({ rectangle: 'r', 'add:text': '' });
+    k.patch('superflash:settings', 'Settings\n\n{"keys":{"rectangle":"q","add:text":"shift+t"}}');
+    key('q');
+    expect(document.body.dataset['tool']).toBe('rectangle');
+    key('T', { shiftKey: true });
+    expect(k.childPins(desk.id).map((p) => p.type)).toEqual(['text']);
+    k.setFocus(null);
+    key('r'); // no longer bound: writes on the paper instead
+    expect(document.querySelector('.canvas-ink-edit')).not.toBeNull();
+  });
+
+  it('the stroke dots set the width of the next shape, and remember it in the settings note', () => {
+    const { k, desk, root, viewport } = setup();
+    root.querySelector<HTMLElement>('.canvas-stroke [data-w="4"]')!.click();
+    expect(root.querySelector('.canvas-stroke button.on')!.getAttribute('data-w')).toBe('4');
+    expect(JSON.parse(k.body('superflash:settings').split('\n\n')[1]!).stroke).toBe(4);
+    key('r');
+    drag(viewport, [0, 0], [50, 50]);
+    expect(scene(k.body(desk.id)).elements[0].strokeWidth).toBe(4);
   });
 });

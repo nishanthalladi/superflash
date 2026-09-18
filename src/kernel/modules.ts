@@ -87,5 +87,6 @@ export async function defineModule(
     title: typeof manifest.title === 'string' ? manifest.title : name,
     source: note,
     ...(manifest.lens === false ? { lens: false } : {}),
+    ...(typeof manifest.icon === 'string' ? { icon: manifest.icon } : {}),
   });
 }

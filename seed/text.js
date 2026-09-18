@@ -1,4 +1,8 @@
-export const type = { name: 'text', title: 'Text' };
+export const type = {
+  name: 'text',
+  title: 'Text',
+  icon: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4 H13 M3 8 H13 M3 12 H9"/></svg>',
+};
 
 /**
  * Text. The plainest Type there is: everything after the name line, in a

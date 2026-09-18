@@ -55,6 +55,8 @@ export interface TypeInfo {
   source?: NoteId;
   /** `false` for a tool that ignores its note: it is not a way of looking, so no picker lists it. */
   lens?: boolean;
+  /** An inline `<svg>` string, 16px, single colour (`currentColor`). Menus show it before the title. */
+  icon?: string;
 }
 
 /**
@@ -124,6 +126,7 @@ export class Registry {
       title: info.title ?? name,
       ...(info.source ? { source: info.source } : {}),
       ...(info.lens === false ? { lens: false } : {}),
+      ...(info.icon ? { icon: info.icon } : {}),
     };
     this.types.set(name, { factory, info: full });
     for (const w of [...this.watchers]) w();
