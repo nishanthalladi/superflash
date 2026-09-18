@@ -25,6 +25,8 @@ export const type = {
  * - double-click a bar → go inside; Escape → out of the text, the selection, the note
  * - drag a bar to move, the corner to resize, Cmd+D for a second pin of the same
  *   note, Backspace (or Cmd+Backspace while typing) to remove one
+ * - move a box into another note: drop it on a canvas box, Cmd+X then Cmd+V after
+ *   going inside, or "move to…" on the bar's menu
  *
  * The paper itself is drawable. After the name line and one blank line the body
  * is an Excalidraw scene, `{"type":"excalidraw","version":2,"elements":[...]}`,
@@ -50,6 +52,9 @@ const snap = (v) => Math.round(v / GRID) * GRID;
 
 /** How deep each pin sits. Set by the canvas that mounts it. */
 const DEPTH = new Map();
+
+/** A cut box waiting for Cmd+V: `{ note, type, width, height }`. Shared, like TOOL. */
+let CLIP = null;
 
 /** Line one is the name. Nothing else names anything. */
 const nameOf = (body) => body.split('\n')[0] || '';
@@ -460,6 +465,39 @@ export default function (host) {
     return made.id;
   }
 
+  /**
+   * Move a box into another note: unpin here, pin the same note there, one undo
+   * step. Refused when the target is not a canvas or would hold itself.
+   */
+  function reparent(pinId, parent, point) {
+    if (!kernel.hasPin(pinId) || !kernel.hasNote(parent)) return null;
+    const { note, type: type_, width, height } = kernel.getPin(pinId);
+    const canvasy = kernel.pinsOf(parent).some((p) => p.type === 'canvas');
+    if (!canvasy || note === parent || kernel.contains(note, parent)) {
+      console.warn('superflash: cannot move a box there');
+      return null;
+    }
+    const made = kernel.journal.transact('move', () => {
+      kernel.unpin(pinId);
+      return kernel.pin(note, parent, type_, { x: snap(point.x), y: snap(point.y), width, height });
+    });
+    kernel.setFocus(made.id);
+    return made.id;
+  }
+
+  /** Every note somewhere shown as a canvas, the surface first, except `not` and what it holds. */
+  const canvasNotes = (not) =>
+    [...new Set(kernel.pinsOfType('canvas').map((p) => p.note))]
+      .filter((n) => kernel.hasNote(n) && n !== not && !kernel.contains(not, n))
+      .sort((a, b) => (b === surface()) - (a === surface()) || nameOf(body(a)).localeCompare(nameOf(body(b))));
+  const surface = () => kernel.childPins(kernel.root)[0]?.note;
+
+  /** The canvas box under `point` on this surface, other than `skip`. */
+  const canvasBoxAt = (point, skip) =>
+    kernel.childPins(current).find(
+      (p) => p.id !== skip && p.type === 'canvas' && point.x >= p.x && point.x <= p.x + p.width && point.y >= p.y && point.y <= p.y + p.height,
+    );
+
   /** Show a note that already exists, or focus the pin that already shows it. */
   function reveal(noteId, type_, size) {
     if (!kernel.hasNote(noteId) || !kernel.types.has(type_)) return null;
@@ -802,6 +840,16 @@ export default function (host) {
       ...look,
       { group: 'box', label: 'go inside', icon: ICONS.inside, on: () => enter(pin.note) },
       { group: 'box', label: 'duplicate', icon: ICONS.duplicate, on: () => duplicate(pinId) },
+      {
+        group: 'box',
+        label: 'move to…',
+        icon: ICONS.inside,
+        on: () =>
+          menu(x, y, canvasNotes(pin.note).map((n) => ({
+            label: nameOf(body(n)) || n,
+            on: () => reparent(pinId, n, { x: GRID * 5, y: GRID * 5 }),
+          })), true),
+      },
       { group: 'box', label: 'delete', icon: ICONS.delete, on: () => kernel.unpin(pinId) },
     ]);
   }
@@ -1072,6 +1120,10 @@ export default function (host) {
 
       if (drag.mode === 'move') {
         kernel.move(drag.pin, { x: snap(drag.start.x + dx), y: snap(drag.start.y + dy) });
+        // Over another canvas box: it lights up, and the drop goes inside it.
+        const over = canvasBoxAt(at(e), drag.pin);
+        drag.over = over ? over.id : null;
+        for (const [id, k] of kids) k.box.classList.toggle('drop-target', id === drag.over);
       } else {
         kernel.move(drag.pin, {
           width: Math.max(MIN, snap(drag.start.width + dx)),
@@ -1082,6 +1134,10 @@ export default function (host) {
 
     const end = () => {
       if (drag && (drag.mode === 'ink-draw' || drag.mode === 'ink-move')) inkEnd();
+      if (drag && drag.over) {
+        kids.get(drag.over)?.box.classList.remove('drop-target');
+        if (kernel.hasPin(drag.over)) reparent(drag.pin, kernel.getPin(drag.over).note, { x: GRID * 4, y: GRID * 5 });
+      }
       drag = null;
     };
     on(viewport, 'pointerup', end);
@@ -1223,6 +1279,26 @@ export default function (host) {
         if (pin) {
           e.preventDefault();
           duplicate(pin);
+        }
+        return;
+      }
+
+      // Cut and paste a box, when no text field wants the keys.
+      if (mod && !isTextField(document.activeElement) && (e.key.toLowerCase() === 'x' || e.key.toLowerCase() === 'v')) {
+        if (e.key.toLowerCase() === 'x') {
+          const pin = kernel.focus();
+          if (!pin) return;
+          e.preventDefault();
+          const { note, type: type_, width, height } = kernel.getPin(pin);
+          CLIP = { note, type: type_, width, height };
+          kernel.journal.transact('cut', () => kernel.unpin(pin));
+        } else if (CLIP) {
+          e.preventDefault();
+          const { note, type: type_, width, height } = CLIP;
+          CLIP = null;
+          if (!kernel.hasNote(note) || note === current || kernel.contains(note, current)) return console.warn('superflash: cannot move a box there');
+          const p = last || centre();
+          kernel.journal.transact('paste', () => kernel.setFocus(kernel.pin(note, current, type_, { x: snap(p.x), y: snap(p.y), width, height }).id));
         }
         return;
       }

@@ -36,6 +36,8 @@ Shape (`version` is always `3`):
 - The surface the user is looking at is the Note pinned on `root` — normally
   `note_2_canvas`. New boxes go on that, or inside whatever box they asked about.
 - Ids are any unique string. Use `note_<slug>` / `pin_<slug>`.
+- To move a box into another note, change its pin's `parent` (and `x`/`y`);
+  the app applies it. A note cannot end up inside itself.
 - Skip the arithmetic: give a new pin `"place": "right-of pin_x"` (or `below`,
   `left-of`, `above`) instead of `x`/`y`; the app resolves it and drops the
   field. Positions snap to 8px if you do set them.

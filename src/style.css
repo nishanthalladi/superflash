@@ -202,6 +202,11 @@ body {
   box-shadow: 0 0 0 2px #fcdf2055, var(--shadow);
 }
 
+.pin.drop-target {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold), var(--shadow);
+}
+
 .pin.broken {
   border-color: var(--bad);
 }
