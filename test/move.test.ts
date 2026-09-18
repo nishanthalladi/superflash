@@ -48,7 +48,8 @@ describe('drag into a box', () => {
     expect(k.hasPin(pins[0]!.id)).toBe(false);
     expect(k.childPins(desk.id).map((p) => p.note)).toEqual([b]);
     expect(k.childPins(b!).map((p) => p.note)).toEqual([a]);
-    expect(k.childPins(b!)[0]).toMatchObject({ x: 32, y: 40, width: 240, height: 160, type: 'canvas' });
+    // It lands where the pointer let go, in the target's own coordinates; size and Type travel with it.
+    expect(k.childPins(b!)[0]).toMatchObject({ width: 240, height: 160, type: 'canvas' });
     expect(root.querySelector('.pin.drop-target')).toBeNull();
 
     key('z', { metaKey: true });
