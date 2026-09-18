@@ -1186,6 +1186,10 @@ export default function (host) {
     on(window, 'keydown', (e) => {
       const mod = e.metaKey || e.ctrlKey;
 
+      // A chord with a modifier fires anywhere, even while typing, and before the
+      // built-ins below — so cmd+shift+d is yours even though cmd+d duplicates.
+      if ((e.metaKey || e.ctrlKey || e.altKey) && fire(keyName(e), e)) return;
+
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) kernel.journal.redo();
@@ -1210,10 +1214,6 @@ export default function (host) {
         saveView();
         return;
       }
-
-      // A chord with a modifier fires anywhere, even while typing: that is what
-      // the modifier is for. Bare letters wait their turn below.
-      if ((e.metaKey || e.ctrlKey || e.altKey) && fire(keyName(e), e)) return;
 
       // Escape steps out one layer at a time: out of the drawing tool, out of the
       // text, out of the selection, out of the note. So Delete has something to delete.
