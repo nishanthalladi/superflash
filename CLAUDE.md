@@ -112,11 +112,13 @@ Keys live in the document too: the note with id `superflash:settings`, body
  "pen":"p","text":"t","eraser":"e","add:chat":"","add:terminal":""},"stroke":2}
 ```
 
-A key is one character or `shift+x`; `add:<type>` drops a box of that Type
-where the pointer is. `stroke` is the ink width (1, 2 or 4). Edit the note and
-the canvas re-reads it; the app makes it on first boot if it is missing. The
-palette (right-click the paper, `+`, or Cmd+K) has a "shortcuts" item that
-pins it as a text box.
+A key is one character or a chord: modifiers in the order `cmd+ctrl+alt+shift+`
+then the key, e.g. `cmd+shift+t`. Bare letters only fire when nothing is
+focused; a chord with a modifier fires anywhere. `add:<type>` drops a box of
+that Type where the pointer is. `stroke` is the ink width (1, 2 or 4). Edit the
+note and the canvas re-reads it; the app makes it on first boot if it is
+missing. In the palette (right-click the paper or `+`) each row's key is a
+button: click it and press the new chord.
 
 ## Terminals
 

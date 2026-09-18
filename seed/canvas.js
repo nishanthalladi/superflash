@@ -33,7 +33,7 @@ export const type = {
  * R rectangle, O ellipse, A arrow, L line, P pen, T text, E eraser by default;
  * the keys, and the stroke width (1, 2, 4), are in the `superflash:settings`
  * note, made on first boot, so editing them is editing text. Right-click the
- * paper, the + or Cmd+K opens the palette: search, Enter, arrows. One gesture
+ * paper or the + opens the palette: search, Enter, arrows. One gesture
  * is one write and one undo step. Ink stroke only, no fill.
  *
  * A canvas inside a canvas is the same code with `depth > 0`: it has its own
@@ -122,10 +122,27 @@ function setStroke(kernel, w) {
   if (kernel.hasNote(SETTINGS)) kernel.journal.transact('settings', () => kernel.patch(SETTINGS, settingsBody({ ...settings(kernel), stroke: w })));
 }
 
-/** `r`, `shift+r`: what a keydown is called in the settings. */
-const keyName = (e) => (e.shiftKey ? 'shift+' : '') + e.key.toLowerCase();
-/** What the menu shows on the right: `R`, `⇧R`. */
-const keyHint = (k) => (k || '').replace('shift+', '⇧').toUpperCase();
+/**
+ * `r`, `shift+r`, `cmd+shift+t`, `ctrl+alt+x`: what a keydown is called in the
+ * settings. Modifiers in a fixed order so the same chord always reads the same.
+ */
+const keyName = (e) =>
+  (e.metaKey ? 'cmd+' : '') + (e.ctrlKey ? 'ctrl+' : '') + (e.altKey ? 'alt+' : '') + (e.shiftKey ? 'shift+' : '') + e.key.toLowerCase();
+/** What the menu shows on the right: `R`, `⇧R`, `⌘⇧T`. */
+const keyHint = (k) =>
+  (k || '').replace('cmd+', '⌘').replace('ctrl+', '⌃').replace('alt+', '⌥').replace('shift+', '⇧').replace(/(.)$/, (c) => c.toUpperCase());
+const MODIFIERS = new Set(['meta', 'control', 'alt', 'shift']);
+
+/** Rebind `name` in the settings note. Empty clears it. */
+function setKey(kernel, name, key) {
+  if (!kernel.hasNote(SETTINGS)) return;
+  const s = settings(kernel);
+  const keys = { ...(s.keys || {}) };
+  // One key, one thing: a chord taken from elsewhere is freed there.
+  for (const k of Object.keys(keys)) if (key && keys[k] === key) keys[k] = '';
+  keys[name] = key;
+  kernel.journal.transact('settings', () => kernel.patch(SETTINGS, settingsBody({ ...s, keys })));
+}
 /** Plain substring: "cha" finds chat, "rec" finds rectangle. Loose matching kept too much. */
 const fuzzy = (q, s) => s.toLowerCase().includes(q);
 
@@ -644,9 +661,34 @@ export default function (host) {
       const label = document.createElement('span');
       label.textContent = item.label;
       b.append(label);
-      // The hint lives in CSS (`attr(data-key)`), so the button's text is just the label.
-      b.dataset.key = keyHint(item.key);
       b.dataset.group = item.group || '';
+      if (item.bind) {
+        // The shortcut is a button of its own: click it, press the new chord.
+        const hint = document.createElement('kbd');
+        hint.className = 'canvas-menu-key';
+        // Drawn from `data-key` by CSS, so the row's text stays just its label.
+        const show = (k) => (hint.dataset.key = keyHint(k) || '·');
+        show(item.key);
+        hint.title = 'click to change the shortcut';
+        hint.onclick = (e) => {
+          e.stopPropagation();
+          hint.dataset.key = 'press…';
+          hint.classList.add('recording');
+          const done = (ev) => {
+            ev.preventDefault();
+            ev.stopImmediatePropagation();
+            if (MODIFIERS.has(ev.key.toLowerCase())) return; // wait for the real key
+            window.removeEventListener('keydown', done, { capture: true });
+            hint.classList.remove('recording');
+            if (ev.key === 'Escape') return show(item.key);
+            const chord = ev.key === 'Backspace' ? '' : keyName(ev);
+            setKey(kernel, item.bind, chord);
+            show(chord);
+          };
+          window.addEventListener('keydown', done, { capture: true });
+        };
+        b.append(hint);
+      }
       b.classList.toggle('chosen', !!item.chosen);
       b.onclick = () => {
         closeMenu();
@@ -714,6 +756,7 @@ export default function (host) {
       label: name,
       icon,
       key: KEYS[name],
+      bind: name,
       chosen: TOOL === name,
       on: () => setTool(name),
     }));
@@ -722,10 +765,10 @@ export default function (host) {
       label: t.title,
       icon: t.icon,
       key: KEYS[`add:${t.name}`],
+      bind: `add:${t.name}`,
       on: () => place(point, t.name, t.name === 'canvas' ? '' : '\n'),
     }));
-    const keys = { group: 'settings', label: 'shortcuts', icon: ICONS.keys, on: () => reveal(SETTINGS, 'text', [360, 200]) };
-    menu(x, y, [...add, ...draw, keys], true);
+    menu(x, y, [...add, ...draw], true);
   }
 
   /** A box's bar: how to look at it, and what to do with it. */
@@ -1123,6 +1166,18 @@ export default function (host) {
 
   // --- keys (outermost only) -----------------------------------------------
 
+  /** Run whatever the settings bind to this chord. True if something was. */
+  function fire(name, e) {
+    const bound = Object.keys(KEYS).find((k) => KEYS[k] && KEYS[k] === name);
+    if (!bound) return false;
+    e.preventDefault();
+    if (bound.startsWith('add:')) {
+      const t = bound.slice(4);
+      if (kernel.types.has(t)) place(last || centre(), t, t === 'canvas' ? '' : '\n');
+    } else setTool(bound);
+    return true;
+  }
+
   function wireKeys() {
     on(window, 'keydown', (e) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -1152,17 +1207,17 @@ export default function (host) {
         return;
       }
 
-      // Cmd+K: the palette, mid-viewport, like the +.
-      if (mod && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        const r = viewport.getBoundingClientRect();
-        paperMenu(r.left + r.width / 2 - 120, r.top + r.height / 2 - 180, centre());
-        return;
-      }
+      // A chord with a modifier fires anywhere, even while typing: that is what
+      // the modifier is for. Bare letters wait their turn below.
+      if ((e.metaKey || e.ctrlKey || e.altKey) && fire(keyName(e), e)) return;
 
-      // Escape steps out one layer at a time: out of the text, out of the
-      // selection, out of the note. So Delete has something to delete.
+      // Escape steps out one layer at a time: out of the drawing tool, out of the
+      // text, out of the selection, out of the note. So Delete has something to delete.
       if (e.key === 'Escape') {
+        if (TOOL !== 'select') {
+          setTool('select');
+          return;
+        }
         if (isTextField(document.activeElement)) document.activeElement.blur();
         else if (SEL) SEL.clear();
         else if (kernel.focus()) kernel.setFocus(null);
@@ -1194,16 +1249,7 @@ export default function (host) {
       if (mod || e.altKey || e.key.length !== 1) return;
 
       // A letter alone picks a tool, or adds a box, as the settings note says.
-      const name = keyName(e);
-      const bound = Object.keys(KEYS).find((k) => KEYS[k] && KEYS[k] === name);
-      if (bound) {
-        e.preventDefault();
-        if (bound.startsWith('add:')) {
-          const t = bound.slice(4);
-          if (kernel.types.has(t)) place(last || centre(), t, t === 'canvas' ? '' : '\n');
-        } else setTool(bound);
-        return;
-      }
+      if (fire(keyName(e), e)) return;
 
       // Nothing has the keyboard and you started typing: that is writing on the
       // paper, where the pointer last was. The key lands in the new element.

@@ -328,12 +328,34 @@ body {
   flex: 1;
 }
 
-/* The shortcut, from `data-key`; nothing when there is none. */
-.canvas-menu button::after {
-  content: attr(data-key);
+/* The shortcut: a small key you can click to change. */
+.canvas-menu-key {
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: var(--paper);
   color: var(--dim);
   font-family: var(--mono);
   font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
+}
+
+.canvas-menu-key::after {
+  content: attr(data-key);
+}
+
+.canvas-menu-key:hover {
+  color: var(--ink);
+  border-color: var(--edge-2);
+}
+
+.canvas-menu-key.recording {
+  color: var(--ink);
+  border-color: var(--gold);
+  background: #fcdf2033;
 }
 
 .canvas-menu button:hover,

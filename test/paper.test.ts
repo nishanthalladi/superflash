@@ -129,7 +129,7 @@ describe('one menu: what do you want here?', () => {
     const labels = [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].map((b) => b.textContent);
     expect(labels).toContain('text');
     expect(labels).toContain('rectangle');
-    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw', 'settings']);
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw']);
 
     [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].find((b) => b.textContent === 'text')!.click();
     const made = k.childPins(desk.id);
@@ -150,7 +150,7 @@ describe('one menu: what do you want here?', () => {
     const pin = k.pin(k.createNote('a').id, desk.id, 'canvas');
     mountCanvas(k, root, desk.id);
     root.querySelector<HTMLElement>('.canvas-plus')!.click();
-    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw', 'settings']);
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw']);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(document.querySelector('.canvas-menu')).toBeNull();
 
@@ -177,19 +177,38 @@ describe('one menu: what do you want here?', () => {
     expect(document.querySelector('.canvas-menu')).toBeNull();
   });
 
-  it('Cmd+K opens the palette; every lens shows an icon and its shortcut', () => {
+  it('the + opens the palette; every row shows an icon and a clickable shortcut that records a chord', () => {
     const { k, desk, root } = setup();
     k.types.define('plain', () => ({ mount() {} }), { title: 'plain' });
     mountCanvas(k, root, desk.id);
-    key('k', { metaKey: true });
+    root.querySelector<HTMLElement>('.canvas-plus')!.click();
     const menu = document.querySelector('.canvas-menu')!;
     expect(menu.querySelector('.canvas-menu-search')).not.toBeNull();
     const buttons = [...menu.querySelectorAll<HTMLElement>('button')];
-    expect(buttons.length).toBe(k.types.list().filter((t) => t.lens !== false).length + 7); // six draws and "shortcuts"
+    expect(buttons.length).toBe(k.types.list().filter((t) => t.lens !== false).length + 6); // six draws
     for (const b of buttons) expect(b.querySelector('svg')).not.toBeNull();
-    expect(buttons.find((b) => b.textContent === 'rectangle')!.dataset['key']).toBe('R');
+    const rect = buttons.find((b) => b.textContent === 'rectangle')!;
+    const hint = rect.querySelector<HTMLElement>('.canvas-menu-key')!;
+    expect(hint.dataset['key']).toBe('R');
+
+    // Click the key, press a chord: it is written to the settings note and shown.
+    hint.click();
+    expect(hint.dataset['key']).toBe('press…');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift', shiftKey: true, cancelable: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'q', metaKey: true, shiftKey: true, cancelable: true }));
+    expect(hint.dataset['key']).toBe('⌘⇧Q');
+    const body = k.body('superflash:settings');
+    expect(JSON.parse(body.slice(body.indexOf('\n\n') + 2)).keys.rectangle).toBe('cmd+shift+q');
     key('Escape');
     expect(document.querySelector('.canvas-menu')).toBeNull();
+
+    // The chord works even while a box is focused, since it has a modifier.
+    k.setFocus(k.pin(k.createNote('x').id, desk.id, 'text').id);
+    key('q', { metaKey: true, shiftKey: true });
+    expect(document.body.dataset['tool']).toBe('rectangle');
+    // Escape leaves the drawing tool.
+    key('Escape');
+    expect(document.body.dataset['tool']).toBe('select');
   });
 
   it('shortcuts live in the settings note: rebind rectangle to q by editing it', () => {
