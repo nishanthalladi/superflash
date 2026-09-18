@@ -21,7 +21,7 @@ const scene = (body: string) => JSON.parse(body.slice(body.indexOf('\n\n') + 2))
 const ev = (el: Element, type: string, o: MouseEventInit = {}) =>
   el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, ...o }));
 const key = (k: string, o: KeyboardEventInit = {}) =>
-  window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, ...o }));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...o }));
 const drag = (el: Element, from: [number, number], to: [number, number]) => {
   ev(el, 'pointerdown', { clientX: from[0], clientY: from[1] });
   ev(el, 'pointermove', { clientX: (from[0] + to[0]) / 2, clientY: (from[1] + to[1]) / 2 });
