@@ -35,6 +35,7 @@ export function httpFs(base = ''): FsClient {
     readDoc: () => json('/_doc') as ReturnType<FsClient['readDoc']>,
     writeDoc: (body) => post('/_doc', { body }) as ReturnType<FsClient['writeDoc']>,
     media: (name, type, base64) => post('/_media', { name, type, base64 }) as ReturnType<FsClient['media']>,
+    web: (url) => json(`/_web?url=${encodeURIComponent(url)}`) as ReturnType<FsClient['web']>,
     async ask(prompt, session, onText) {
       const res = await fetch(`${base}/_ask`, {
         method: 'POST',

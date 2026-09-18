@@ -31,6 +31,8 @@ export interface FsClient {
   writeDoc(body: string): Promise<{ mtime: number }>;
   /** Image bytes into `media/<name>`; served at `/<path>` in dev. */
   media(name: string, type: string, base64: string): Promise<{ path: string }>;
+  /** A web page, fetched server-side: its title and readable text. */
+  web(url: string): Promise<{ title: string; text: string }>;
 }
 
 /** What a Type looks like from the outside once it is registered. */

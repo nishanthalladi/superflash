@@ -11,6 +11,7 @@ import splitJs from '../seed/split.js?raw';
 import textJs from '../seed/text.js?raw';
 import chatJs from '../seed/chat.js?raw';
 import imageJs from '../seed/image.js?raw';
+import webJs from '../seed/web.js?raw';
 
 /**
  * The canvas and the tools are seed Notes, so tests compile them the same way the
@@ -27,6 +28,7 @@ export const split = await factory(splitJs);
 export const text = await factory(textJs);
 export const chat = await factory(chatJs);
 export const image = await factory(imageJs);
+export const web = await factory(webJs);
 
 /** A Type with no powers and no chrome, for tests that only need something drawn. */
 export const plain: TypeFactory = (host) => {
@@ -59,6 +61,7 @@ export function fakeFs(seed: Record<string, string> = {}) {
   const ran: string[][] = [];
   const asked: { prompt: string; session?: string }[] = [];
   const media: { name: string; type: string; base64: string }[] = [];
+  const fetched: string[] = [];
   let docFile: string | null = null;
   let docMtime = 0;
   let clock = 1;
@@ -96,6 +99,10 @@ export function fakeFs(seed: Record<string, string> = {}) {
       media.push({ name, type, base64 });
       return { path: `media/${name}` };
     },
+    async web(url) {
+      fetched.push(url);
+      return { title: 'Example Domain', text: 'This domain is for use in examples.' };
+    },
     async ask(prompt, session, onText) {
       asked.push({ prompt, session });
       for (const piece of ['echo: ', prompt]) onText(piece);
@@ -116,7 +123,7 @@ export function fakeFs(seed: Record<string, string> = {}) {
     docMtime += 1;
   };
 
-  return { fs, files, outside, outsideDoc, doc: () => docFile, writes, ran, asked, media };
+  return { fs, files, outside, outsideDoc, doc: () => docFile, writes, ran, asked, media, fetched };
 }
 
 /**
