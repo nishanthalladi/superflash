@@ -1,5 +1,11 @@
 # Superflash
 
+**Read the notebook first.** In `.superflash/doc.json`, the canvas note named
+`superflash planning` holds a `memory` canvas: what the owner is like, the rule
+the whole design rests on, past mistakes, and where work stood. Read those
+notes before doing anything, and write what you learn back into them. There
+are no Claude Code memory files for this project on purpose.
+
 An intelligent notebook: an infinite canvas of boxes, where every box is a Note
 and the whole repo is part of the same document. You are usually being run
 *from inside it*, through a chat box, and you can operate it by editing files.
