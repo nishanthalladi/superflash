@@ -161,6 +161,8 @@ export default function (host) {
       wrap.className = 'text-wrap';
       wrap.append(text, gutter);
       text.addEventListener('scroll', drawTasks);
+      // The web font lands after mount and moves every wrap point.
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawTasks);
       if (typeof ResizeObserver === 'function') new ResizeObserver(drawTasks).observe(text);
       box.append(wrap, out);
       drawTasks();
