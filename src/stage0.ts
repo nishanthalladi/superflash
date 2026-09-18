@@ -29,6 +29,7 @@ export const POLICY: Record<string, Grant[]> = {
   // A text box runs what you type in it, so it holds the same.
   text: [SHELL, FS, DEFINE, CREATE, TYPES, MACHINE],
   chat: [FS],
+  image: [FS],
   split: [SHELL],
   code: [DEFINE],
   tree: [FS],

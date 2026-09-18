@@ -29,6 +29,8 @@ export interface FsClient {
   /** The live document on disk, so an agent in the repo sees what you see. */
   readDoc(): Promise<{ body: string | null; mtime: number }>;
   writeDoc(body: string): Promise<{ mtime: number }>;
+  /** Image bytes into `media/<name>`; served at `/<path>` in dev. */
+  media(name: string, type: string, base64: string): Promise<{ path: string }>;
 }
 
 /** What a Type looks like from the outside once it is registered. */

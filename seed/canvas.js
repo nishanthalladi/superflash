@@ -635,9 +635,15 @@ export default function (host) {
       menu(e.clientX, e.clientY, views.get(current) || 'canvas', setView);
     });
 
-    // Paste onto the surface: a text box holding the clipboard.
+    // Paste onto the surface: a text box holding the clipboard, or an image box for a picture.
     on(window, 'paste', (e) => {
       if (isTextField(document.activeElement)) return;
+      const item = e.clipboardData && [...(e.clipboardData.items || [])].find((i) => i.type.startsWith('image/'));
+      if (item) {
+        e.preventDefault();
+        void pasteImage(item.getAsFile(), item.type, host.fs()).then((p) => place(centre(), 'image', `\n${p}`));
+        return;
+      }
       const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
       if (!text) return;
       e.preventDefault();
@@ -813,6 +819,18 @@ export default function (host) {
     },
     render,
   };
+}
+
+/** Clipboard image → `media/<yyyy-mm-dd-hhmmss>.<ext>` in the repo; resolves to the path. */
+async function pasteImage(file, type, fs) {
+  const url = await new Promise((r) => {
+    const fr = new FileReader();
+    fr.onload = () => r(fr.result);
+    fr.readAsDataURL(file);
+  });
+  const b64 = url.slice(url.indexOf(',') + 1);
+  const stamp = new Date().toISOString().slice(0, 19).replace('T', '-').replaceAll(':', '');
+  return (await fs.media(`${stamp}.${type === 'image/jpeg' ? 'jpg' : type.slice(6)}`, type, b64)).path;
 }
 
 /** Does anything between `el` and its pin scroll? */

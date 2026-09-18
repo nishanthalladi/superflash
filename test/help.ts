@@ -10,6 +10,7 @@ import gitPanelJs from '../seed/git-panel.js?raw';
 import splitJs from '../seed/split.js?raw';
 import textJs from '../seed/text.js?raw';
 import chatJs from '../seed/chat.js?raw';
+import imageJs from '../seed/image.js?raw';
 
 /**
  * The canvas and the tools are seed Notes, so tests compile them the same way the
@@ -25,6 +26,7 @@ export const gitPanel = await factory(gitPanelJs);
 export const split = await factory(splitJs);
 export const text = await factory(textJs);
 export const chat = await factory(chatJs);
+export const image = await factory(imageJs);
 
 /** A Type with no powers and no chrome, for tests that only need something drawn. */
 export const plain: TypeFactory = (host) => {
@@ -56,6 +58,7 @@ export function fakeFs(seed: Record<string, string> = {}) {
   const writes: string[] = [];
   const ran: string[][] = [];
   const asked: { prompt: string; session?: string }[] = [];
+  const media: { name: string; type: string; base64: string }[] = [];
   let docFile: string | null = null;
   let docMtime = 0;
   let clock = 1;
@@ -89,6 +92,10 @@ export function fakeFs(seed: Record<string, string> = {}) {
       docMtime += 1;
       return { mtime: docMtime };
     },
+    async media(name, type, base64) {
+      media.push({ name, type, base64 });
+      return { path: `media/${name}` };
+    },
     async ask(prompt, session, onText) {
       asked.push({ prompt, session });
       for (const piece of ['echo: ', prompt]) onText(piece);
@@ -109,7 +116,7 @@ export function fakeFs(seed: Record<string, string> = {}) {
     docMtime += 1;
   };
 
-  return { fs, files, outside, outsideDoc, doc: () => docFile, writes, ran, asked };
+  return { fs, files, outside, outsideDoc, doc: () => docFile, writes, ran, asked, media };
 }
 
 /**

@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DENY, MAX_BYTES, Refused, git, list, read, resolveSafe, write } from '../plugins/bridge';
+import { DENY, MAX_BYTES, Refused, git, list, media, read, resolveSafe, write } from '../plugins/bridge';
 
 let root: string;
 let outside: string;
@@ -112,5 +112,25 @@ describe('git', () => {
 
     const ok = await git(root, ['commit', '-m', 'fix: $(whoami) && `ls` ;']);
     expect(ok.code === 0 || ok.stderr.includes('user')).toBe(true);
+  });
+});
+
+describe('media', () => {
+  const png = Buffer.from('not really a png').toString('base64');
+
+  it('writes an image under media/ and nowhere else', async () => {
+    expect(await media(root, 'a.png', 'image/png', png)).toEqual({ path: 'media/a.png' });
+    expect((await fs.readFile(path.join(root, 'media', 'a.png'))).toString()).toBe('not really a png');
+    expect((await list(root)).map((e) => e.path)).not.toContain('media/a.png');
+    for (const bad of ['../a.png', 'x/a.png', '/etc/a.png', '', 'a.txt']) {
+      await expect(media(root, bad, 'image/png', png)).rejects.toThrow(Refused);
+    }
+  });
+
+  it('refuses a non-image type, a mismatched name, and a non-string body', async () => {
+    await expect(media(root, 'a.svg', 'image/svg+xml', png)).rejects.toThrow(Refused);
+    await expect(media(root, 'a.js', 'text/javascript', png)).rejects.toThrow(Refused);
+    await expect(media(root, 'a.png', 'image/jpeg', png)).rejects.toThrow(Refused);
+    await expect(media(root, 'a.png', 'image/png', 42)).rejects.toThrow(Refused);
   });
 });
