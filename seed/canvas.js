@@ -515,7 +515,10 @@ export default function (host) {
     if (outer || typeof document.elementFromPoint !== 'function') return null;
     const r = viewport.getBoundingClientRect();
     if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return null;
-    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    let hit = document.elementFromPoint(e.clientX, e.clientY);
+    // Our own frame (bar, border, resize corner) counts as the paper around us.
+    const ours = viewport.closest('.pin');
+    if (hit && ours && ours.contains(hit)) hit = ours.parentElement;
     const holder = hit && hit.closest ? hit.closest('.canvas-inside, .canvas-viewport') : null;
     if (!holder) return null;
     const pinEl = holder.closest('.pin');
