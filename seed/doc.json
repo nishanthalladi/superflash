@@ -7,7 +7,7 @@
   "notes": [
     { "id": "note_1_root", "body": "root" },
     { "id": "note_2_canvas", "body": "Superflash" },
-    { "id": "note_3_hello", "body": "Instructions\nDouble-click empty space for a box. Just start typing for text.\nDouble-click a box's title bar to go inside it. Drag the dotted handle to move it.\nEscape comes back out.\n\nThe first line of a box is its name. Right-click its bar to change how it is drawn; right-click the big title bar to change how the note you are inside is shown.\nShift+Enter runs a text box." },
+    { "id": "note_3_hello", "body": "Instructions\nRight-click the paper, or press +, for anything: a box of any kind, or a shape to draw.\nJust start typing to write on the paper. Double-click empty space for a box.\nDouble-click a box's title bar to go inside it; drag the dotted handle to move it. Escape comes back out.\n\nThe first line of a box is its name. Right-click its bar to look at it another way, duplicate it, or delete it.\nShift+Enter runs a text box." },
     { "id": "note_10_canvas", "body": "@canvas.js" },
     { "id": "note_11_tree", "body": "@tree.js" },
     { "id": "note_12_git", "body": "@git-panel.js" },

@@ -32,7 +32,7 @@ describe('what you see when it boots', () => {
     expect(root.querySelector('.palette')).toBeNull();
     expect(root.querySelector('.tree')).toBeNull();
     expect(root.querySelector('.superflash-bar')).toBeNull();
-    expect(root.querySelectorAll('button:not(.canvas-tools button)')).toHaveLength(0);
+    expect(root.querySelectorAll('button:not(.canvas-tools button):not(.canvas-plus)')).toHaveLength(0);
   });
 
   it('keeps the canvas itself in the document, not in src', async () => {

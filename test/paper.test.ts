@@ -119,3 +119,45 @@ describe('drawing on the paper', () => {
     expect(el.points[1][0]).toBeCloseTo(50, 5);
   });
 });
+
+describe('one menu: what do you want here?', () => {
+  it('right-click on bare paper offers places and draws; a place drops a box there, a draw sets the tool', () => {
+    const { k, desk, root } = setup();
+    mountCanvas(k, root, desk.id);
+    const viewport = root.querySelector<HTMLElement>('.canvas-viewport')!;
+    viewport.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 200 }));
+    const labels = [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].map((b) => b.textContent);
+    expect(labels).toContain('text');
+    expect(labels).toContain('rectangle');
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['place', 'draw']);
+
+    [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].find((b) => b.textContent === 'text')!.click();
+    const made = k.childPins(desk.id);
+    expect(made).toHaveLength(1);
+    expect(made[0]!.type).toBe('text');
+    expect(document.querySelector('.canvas-menu')).toBeNull();
+
+    viewport.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 600, clientY: 400 }));
+    [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].find((b) => b.textContent === 'rectangle')!.click();
+    expect(document.body.dataset['tool']).toBe('rectangle');
+    k.setFocus(null); // letters go to a focused box first; with none, they pick tools
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' }));
+    expect(document.body.dataset['tool']).toBe('select');
+  });
+
+  it('the + opens the same menu; a bar offers look-at-as and box actions', () => {
+    const { k, desk, root } = setup();
+    const pin = k.pin(k.createNote('a').id, desk.id, 'canvas');
+    mountCanvas(k, root, desk.id);
+    root.querySelector<HTMLElement>('.canvas-plus')!.click();
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['place', 'draw']);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(document.querySelector('.canvas-menu')).toBeNull();
+
+    root.querySelector<HTMLElement>('.pin .canvas-bar')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    const labels = [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].map((b) => b.textContent);
+    expect(labels).toEqual(expect.arrayContaining(['canvas', 'text', 'go inside', 'duplicate', 'delete']));
+    [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].find((b) => b.textContent === 'delete')!.click();
+    expect(k.hasPin(pin.id)).toBe(false);
+  });
+});

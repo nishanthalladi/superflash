@@ -824,6 +824,46 @@ body[data-tool='text'] .canvas-inside {
   cursor: text;
 }
 
+.canvas-plus {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 5;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.canvas-plus:hover {
+  background: var(--paper-2);
+}
+
+/* Drawing: the + steps aside for the tray until you pick the cursor again. */
+body:not([data-tool='select']) .canvas-plus {
+  display: none;
+}
+
+body[data-tool='select'] .canvas-tools {
+  display: none;
+}
+
+.canvas-menu-group {
+  padding: 6px 10px 2px;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .canvas-tools {
   position: absolute;
   left: 10px;

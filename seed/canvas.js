@@ -539,21 +539,34 @@ export default function (host) {
 
   // --- how a note is shown ---------------------------------------------------
 
-  /** A small list of Types at the pointer. `pick` gets the name; anything else closes it. */
-  function menu(x, y, chosen, pick) {
+  /** Every way of looking at a note. Tools that ignore their note are left out. */
+  const lenses = () => kernel.types.list().filter((t) => t.lens !== false);
+
+  /**
+   * The one menu. `items` is a list of `{ label, on, chosen?, group? }`; a new
+   * `group` starts a section. Anything outside closes it and does nothing else.
+   */
+  function menu(x, y, items) {
     closeMenu();
     const el = document.createElement('div');
     el.className = 'canvas-menu';
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    // Tools that ignore their note are not ways of looking at one.
-    for (const t of kernel.types.list().filter((t) => t.lens !== false)) {
+    el.style.left = `${Math.min(x, innerWidth - 180)}px`;
+    el.style.top = `${Math.min(y, innerHeight - 24 * items.length - 40)}px`;
+    let group;
+    for (const item of items) {
+      if (item.group && item.group !== group) {
+        group = item.group;
+        const h = document.createElement('div');
+        h.className = 'canvas-menu-group';
+        h.textContent = group;
+        el.append(h);
+      }
       const b = document.createElement('button');
-      b.textContent = t.title;
-      b.classList.toggle('chosen', t.name === chosen);
+      b.textContent = item.label;
+      b.classList.toggle('chosen', !!item.chosen);
       b.onclick = () => {
         closeMenu();
-        pick(t.name);
+        item.on();
       };
       el.append(b);
     }
@@ -577,6 +590,39 @@ export default function (host) {
 
   function closeMenu() {
     for (const m of document.querySelectorAll('.canvas-menu')) m.close ? m.close() : m.remove();
+  }
+
+  /** "What do you want here?" — draw something, or place a box. Right-click on paper, or the +. */
+  function paperMenu(x, y, point) {
+    const draw = TOOLS.filter(([name]) => name !== 'select' && name !== 'eraser').map(([name]) => ({
+      group: 'draw',
+      label: name,
+      chosen: TOOL === name,
+      on: () => setTool(name),
+    }));
+    const put = lenses().map((t) => ({
+      group: 'place',
+      label: t.title,
+      on: () => place(point, t.name, t.name === 'canvas' ? '' : '\n'),
+    }));
+    menu(x, y, [...put, ...draw]);
+  }
+
+  /** A box's bar: how to look at it, and what to do with it. */
+  function boxMenu(x, y, pinId) {
+    const pin = kernel.getPin(pinId);
+    const look = lenses().map((t) => ({
+      group: 'look at as',
+      label: t.title,
+      chosen: t.name === pin.type,
+      on: () => retype(pinId, t.name),
+    }));
+    menu(x, y, [
+      ...look,
+      { group: 'box', label: 'go inside', on: () => enter(pin.note) },
+      { group: 'box', label: 'duplicate', on: () => duplicate(pinId) },
+      { group: 'box', label: 'delete', on: () => kernel.unpin(pinId) },
+    ]);
   }
 
   /**
@@ -905,19 +951,34 @@ export default function (host) {
       place(at(e));
     });
 
-    // Right-click a bar: what draws this box. Right-click the title: how this note is shown.
+    // Right-click: on a bar, the box's menu; on bare paper, "what do you want
+    // here?"; inside a Type's own face, the browser's menu (a terminal wants its paste).
     on(viewport, 'contextmenu', (e) => {
-      const barEl = boxAt(e) && e.target.closest('.canvas-bar');
-      if (!barEl) return;
+      const box = boxAt(e);
+      if (box) {
+        if (!e.target.closest('.canvas-bar')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        boxMenu(e.clientX, e.clientY, box.dataset.pin);
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
-      const pinId = barEl.closest('.pin').dataset.pin;
-      menu(e.clientX, e.clientY, kernel.getPin(pinId).type, (t) => retype(pinId, t));
+      paperMenu(e.clientX, e.clientY, at(e));
     });
     if (!outer) return;
     on(head, 'contextmenu', (e) => {
       e.preventDefault();
-      menu(e.clientX, e.clientY, views.get(current) || 'canvas', setView);
+      menu(
+        e.clientX,
+        e.clientY,
+        lenses().map((t) => ({
+          group: 'look at as',
+          label: t.title,
+          chosen: (views.get(current) || 'canvas') === t.name,
+          on: () => setView(t.name),
+        })),
+      );
     });
 
     // Paste onto the surface: a text box holding the clipboard, or an image box for a picture.
@@ -1056,6 +1117,18 @@ export default function (host) {
       viewport.append(layer);
       stage.append(viewport);
       if (outer) {
+        const plus = document.createElement('button');
+        plus.className = 'canvas-plus';
+        plus.textContent = '+';
+        plus.title = 'what do you want here?';
+        on(plus, 'click', () => {
+          const r = plus.getBoundingClientRect();
+          paperMenu(r.right + 6, r.top, centre());
+          plus.blur();
+        });
+        stage.append(plus);
+
+        // The tray only shows while a drawing tool is active; the + is how you start.
         const tools = document.createElement('div');
         tools.className = 'canvas-tools';
         for (const [name, key, glyph] of TOOLS) {
