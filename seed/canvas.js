@@ -1192,6 +1192,8 @@ export default function (host) {
 
   function wireKeys() {
     on(window, 'keydown', (e) => {
+      // Another canvas (a test leaves several mounted) already took this key.
+      if (e.defaultPrevented) return;
       const mod = e.metaKey || e.ctrlKey;
 
       // A chord with a modifier fires anywhere, even while typing, and before the
