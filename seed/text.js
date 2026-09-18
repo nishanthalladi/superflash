@@ -22,21 +22,6 @@ const restOf = (body) => body.split('\n').slice(1).join('\n');
 const nameOf = (body) => body.split('\n')[0] || '';
 const join = (name, rest) => (rest === '' ? name : `${name}\n${rest}`);
 
-/** How wide this exact text is in this font — a proportional face has no `ch` to trust. */
-const widths = new Map();
-function textWidth(font, text) {
-  const key = `${font}\u0000${text}`;
-  if (!widths.has(key)) {
-    const probe = document.createElement('span');
-    probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:${font}`;
-    probe.textContent = text;
-    document.body.append(probe);
-    widths.set(key, probe.getBoundingClientRect().width || text.length * 7);
-    probe.remove();
-  }
-  return widths.get(key);
-}
-
 /** Real ESM from a string, so a box can be run. No eval. */
 async function load(source) {
   const url = `data:text/javascript;base64,${btoa(unescape(encodeURIComponent(source)))}`;
@@ -55,42 +40,58 @@ export default function (host) {
   };
 
   /**
-   * One checkbox per task line, laid exactly over its `[ ]` so the brackets are
-   * covered and the box reads as part of the line. Long lines that wrap put the
-   * later boxes off by a line; ponytail: fine for a list, revisit for prose.
+   * One checkbox per task line, over its `[ ]`. Long lines wrap, so the row of a
+   * line is not its index: a hidden mirror of the textarea, same width and font,
+   * tells us where each line actually landed.
    */
   function drawTasks() {
     gutter.replaceChildren();
     const lines = text.value.split('\n');
+    if (!lines.some((l) => TASK.test(l))) return;
     const cs = getComputedStyle(text);
-    const line = parseFloat(cs.lineHeight) || 20;
-    const top = parseFloat(cs.paddingTop) || 0;
-    const left = parseFloat(cs.paddingLeft) || 0;
+    const mirror = document.createElement('div');
+    mirror.className = 'text-mirror';
+    mirror.style.cssText = `font:${cs.font};letter-spacing:${cs.letterSpacing};padding:${cs.padding};width:${text.clientWidth}px;line-height:${cs.lineHeight};tab-size:${cs.tabSize}`;
+    const marks = [];
     lines.forEach((l, i) => {
       const m = TASK.exec(l);
-      if (!m) return;
+      const row = document.createElement('div');
+      if (m) {
+        const before = document.createElement('span');
+        before.textContent = `${m[1]}- `;
+        const box = document.createElement('span');
+        box.textContent = `[${m[2]}]`;
+        const after = document.createElement('span');
+        after.textContent = l.slice(m[0].length - 1) || ' ';
+        row.append(before, box, after);
+        marks.push({ i, box, done: m[2] === 'x' });
+      } else row.textContent = l || ' ';
+      mirror.append(row);
+    });
+    text.parentElement.append(mirror);
+    const base = mirror.getBoundingClientRect();
+    for (const { i, box, done } of marks) {
+      const r = box.getBoundingClientRect();
       const cover = document.createElement('label');
       cover.className = 'text-task';
-      cover.style.top = `${top + i * line - text.scrollTop}px`;
-      // Cover only the `[ ]`, measured in this font; the dash stays as a bullet
-      // and the text after is never touched even if the measure is a hair off.
-      const before = textWidth(cs.font, `${m[1]}- `);
-      cover.style.left = `${left + before - 1}px`;
-      cover.style.width = `${textWidth(cs.font, `${m[1]}- [${m[2]}]`) - before + 2}px`;
-      cover.style.height = `${line}px`;
-      const box = document.createElement('input');
-      box.type = 'checkbox';
-      box.checked = m[2] === 'x';
+      cover.style.top = `${r.top - base.top - text.scrollTop}px`;
+      cover.style.left = `${r.left - base.left - 1}px`;
+      cover.style.width = `${r.width + 2}px`;
+      cover.style.height = `${r.height}px`;
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = done;
       cover.addEventListener('pointerdown', (e) => e.stopPropagation());
-      box.addEventListener('change', () => {
+      input.addEventListener('change', () => {
         const all = text.value.split('\n');
-        all[i] = all[i].replace(TASK, `$1- [${box.checked ? 'x' : ' '}] `);
+        all[i] = all[i].replace(TASK, `$1- [${input.checked ? 'x' : ' '}] `);
         text.value = all.join('\n');
         write();
       });
-      cover.append(box);
+      cover.append(input);
       gutter.append(cover);
-    });
+    }
+    mirror.remove();
   }
 
   function show(value, bad = false) {
@@ -153,6 +154,7 @@ export default function (host) {
       wrap.className = 'text-wrap';
       wrap.append(text, gutter);
       text.addEventListener('scroll', drawTasks);
+      if (typeof ResizeObserver === 'function') new ResizeObserver(drawTasks).observe(text);
       box.append(wrap, out);
       drawTasks();
     },
