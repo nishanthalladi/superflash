@@ -253,6 +253,29 @@ export async function writeDocFile(root: string, body: unknown): Promise<{ mtime
   return { mtime: Math.round((await fs.stat(full)).mtimeMs) };
 }
 
+// --- media -----------------------------------------------------------------
+
+export const MEDIA_MAX = 20 * 1024 * 1024;
+const MEDIA_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+
+/**
+ * Bytes into `media/<name>`, and nowhere else. The only route that writes binary;
+ * `list` skips it (BINARY), and Vite serves the result at `/media/<name>` in dev.
+ */
+export async function media(root: string, name: unknown, type: unknown, base64: unknown): Promise<{ path: string }> {
+  const ext = MEDIA_TYPES[String(type)];
+  if (!ext) throw new Refused(`not an image: ${String(type)}`);
+  if (typeof name !== 'string' || !/^[\w.-]+$/.test(name) || !name.endsWith(`.${ext}`)) throw new Refused(`bad media name: ${String(name)}`);
+  if (typeof base64 !== 'string') throw new Refused('base64 must be a string');
+  const bytes = Buffer.from(base64, 'base64');
+  if (!bytes.length || bytes.length > MEDIA_MAX) throw new Refused(`too big: ${name}`);
+  const base = await fs.realpath(root);
+  const full = path.join(base, 'media', name);
+  await fs.mkdir(path.dirname(full), { recursive: true });
+  await fs.writeFile(full, bytes);
+  return { path: `media/${name}` };
+}
+
 // --- the plugin ------------------------------------------------------------
 
 const readBody = (req: IncomingMessage): Promise<unknown> =>
@@ -279,7 +302,7 @@ export function bridge(options: { root?: string } = {}): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://superflash');
-        if (!url.pathname.startsWith('/_fs/') && !['/_git', '/_ask', '/_doc'].includes(url.pathname)) return next();
+        if (!url.pathname.startsWith('/_fs/') && !['/_git', '/_ask', '/_doc', '/_media'].includes(url.pathname)) return next();
 
         const send = (code: number, value: unknown): void => {
           res.statusCode = code;
@@ -297,6 +320,10 @@ export function bridge(options: { root?: string } = {}): Plugin {
           if (url.pathname === '/_git') {
             const input = (await readBody(req)) as { args?: unknown };
             return send(200, await git(root, input.args));
+          }
+          if (url.pathname === '/_media') {
+            const input = (await readBody(req)) as { name?: unknown; type?: unknown; base64?: unknown };
+            return send(200, await media(root, input.name, input.type, input.base64));
           }
           if (url.pathname === '/_doc' && req.method === 'GET') return send(200, (await readDocFile(root)) ?? { body: null, mtime: 0 });
           if (url.pathname === '/_doc') {

@@ -34,6 +34,7 @@ export function httpFs(base = ''): FsClient {
     git: (args) => post('/_git', { args }) as ReturnType<FsClient['git']>,
     readDoc: () => json('/_doc') as ReturnType<FsClient['readDoc']>,
     writeDoc: (body) => post('/_doc', { body }) as ReturnType<FsClient['writeDoc']>,
+    media: (name, type, base64) => post('/_media', { name, type, base64 }) as ReturnType<FsClient['media']>,
     async ask(prompt, session, onText) {
       const res = await fetch(`${base}/_ask`, {
         method: 'POST',
