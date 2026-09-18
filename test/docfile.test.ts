@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { stage0 } from '../src/stage0';
 import { memoryStore } from '../src/kernel/persist';
-import { applyDoc, forDisk } from '../src/docfile';
+import { applyDoc, forDisk, placed } from '../src/docfile';
 import type { Doc } from '../src/kernel/kernel';
 import { fakeFs, until } from './help';
 
@@ -84,5 +84,23 @@ describe('the document on disk', () => {
     expect(kernel.hasPin(pin.id)).toBe(false);
     expect(kernel.hasNote(pin.note)).toBe(false);
     expect(kernel.hasNote('file:x.md')).toBe(true);
+  });
+});
+
+describe('place: layout without arithmetic', () => {
+  it('right-of and below land beside the named pin, on its parent', async () => {
+    const repo = fakeFs();
+    const { kernel, shell } = await stage0(host(), memoryStore(), { fs: repo.fs });
+    const surface = kernel.getPin(shell!).note;
+    const by = kernel.childPins(surface)[0]!;
+    const base = { id: 'pin_p', note: by.note, parent: 'wrong', type: 'text', x: 0, y: 0, width: 200, height: 100 };
+
+    expect(placed(kernel, { ...base, place: `right-of ${by.id}` })).toMatchObject({
+      x: by.x + by.width + 24, y: by.y, parent: surface,
+    });
+    expect(placed(kernel, { ...base, place: `below ${by.id}` })).toMatchObject({ x: by.x, y: by.y + by.height + 24 });
+    expect('place' in placed(kernel, { ...base, place: `below ${by.id}` })).toBe(false);
+    // Unknown pin: the field is ignored and x, y stand.
+    expect(placed(kernel, { ...base, place: 'below pin_nope' })).toMatchObject({ x: 0, y: 0, parent: 'wrong' });
   });
 });

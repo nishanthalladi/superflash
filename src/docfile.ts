@@ -1,4 +1,5 @@
 import type { Doc, Kernel } from './kernel/kernel';
+import type { Pin } from './kernel/model';
 import type { FsClient } from './kernel/type';
 import { filePath } from './files';
 
@@ -36,6 +37,27 @@ export function forDisk(doc: Doc): Doc {
  * ponytail: notes and pins only. Grants and modules stay as booted; an agent that
  * wants a new Type writes a file and pins it.
  */
+const GAP = 24;
+
+/**
+ * `"place": "right-of pin_x"` (or `below`, `left-of`, `above`) instead of x and
+ * y: the box lands beside that pin, and the field is gone by the next write.
+ * For whoever writes the file by hand — an agent — so layout is not arithmetic.
+ */
+export function placed(kernel: Kernel, pin: Pin & { place?: string }): Pin {
+  const m = /^(right-of|left-of|below|above)\s+(\S+)$/.exec(pin.place ?? '');
+  if (!m || !kernel.hasPin(m[2]!)) return pin;
+  const by = kernel.getPin(m[2]!);
+  const { place: _, ...rest } = pin;
+  const at = {
+    'right-of': { x: by.x + by.width + GAP, y: by.y },
+    'left-of': { x: by.x - pin.width - GAP, y: by.y },
+    below: { x: by.x, y: by.y + by.height + GAP },
+    above: { x: by.x, y: by.y - pin.height - GAP },
+  }[m[1]!]!;
+  return { ...rest, ...at, parent: by.parent };
+}
+
 export function applyDoc(kernel: Kernel, doc: Doc): void {
   kernel.journal.transact('outside', () => {
     const notes = new Set<string>();
@@ -44,7 +66,7 @@ export function applyDoc(kernel: Kernel, doc: Doc): void {
       if (!kernel.hasNote(n.id)) kernel.createNote(n.body, n.id);
       else if (kernel.body(n.id) !== n.body) kernel.patch(n.id, n.body);
     }
-    const pins = new Map(doc.pins.map((p) => [p.id, p]));
+    const pins = new Map(doc.pins.map((p) => [p.id, placed(kernel, p)]));
     for (const p of kernel.allPins()) {
       if (filePath(p.note) !== null) continue; // the mirror is not in the file
       if (!pins.has(p.id)) kernel.unpin(p.id);
