@@ -174,18 +174,16 @@ describe('a Type is a way of looking', () => {
     expect(k.childPins(desk.id)).toHaveLength(1);
   });
 
-  it('typing on bare canvas makes a text box; a canvas never becomes text itself', () => {
+  it('typing on bare canvas writes on the paper; a canvas never becomes text itself', () => {
     const { k, desk, root } = setup();
     mountCanvas(k, root, desk.id);
     expect(k.childPins(desk.id)).toHaveLength(0);
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'h' }));
 
-    const made = k.childPins(desk.id);
-    expect(made).toHaveLength(1);
-    expect(made[0]!.type).toBe('text');
-    expect(k.focus()).toBe(made[0]!.id);
-    expect(document.activeElement).toBe(body(root.querySelector<HTMLElement>('.pin')!));
+    // No pin: the letter lands in an editor over the paper (see paper.test.ts).
+    expect(k.childPins(desk.id)).toHaveLength(0);
+    expect(document.activeElement).toBe(root.querySelector('.canvas-ink-edit'));
     // The surface itself is untouched: still a canvas, still showing its boxes.
     expect(k.body(desk.id)).toBe('desk');
     expect(root.querySelector('.canvas-viewport')).not.toBeNull();

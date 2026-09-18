@@ -16,11 +16,18 @@ export const type = { name: 'canvas', title: 'Canvas' };
  * like the camera: the document says what a note holds, not how you last looked.
  *
  * - double-click empty space → a new box (a canvas)
- * - just start typing → a new text box, with what you typed in it
+ * - just start typing → words on the paper, where the pointer last was
  * - paste → a new text box holding the clipboard
  * - double-click a bar → go inside; Escape → out of the text, the selection, the note
  * - drag a bar to move, the corner to resize, Cmd+D for a second pin of the same
  *   note, Backspace (or Cmd+Backspace while typing) to remove one
+ *
+ * The paper itself is drawable. After the name line and one blank line the body
+ * is an Excalidraw scene, `{"type":"excalidraw","version":2,"elements":[...]}`,
+ * in the same coordinates as the pins, drawn as crisp SVG under the boxes. The
+ * toolbar (outermost only; nested canvases use the same tool) is V select,
+ * R rectangle, O ellipse, A arrow, L line, P pen, T text, E eraser. One gesture
+ * is one write and one undo step. No style panel yet: ink stroke, no fill.
  *
  * A canvas inside a canvas is the same code with `depth > 0`: it has its own
  * camera, and while the pointer is over it you are in that world — wheel, drag,
@@ -39,6 +46,110 @@ const DEPTH = new Map();
 
 /** Line one is the name. Nothing else names anything. */
 const nameOf = (body) => body.split('\n')[0] || '';
+
+// --- ink: the paper is an Excalidraw scene ----------------------------------
+
+const NS = 'http://www.w3.org/2000/svg';
+const TOOLS = [
+  ['select', 'v', '↖'], ['rectangle', 'r', '▢'], ['ellipse', 'o', '◯'], ['arrow', 'a', '→'],
+  ['line', 'l', '─'], ['pen', 'p', '✎'], ['text', 't', 'T'], ['eraser', 'e', '⌫'],
+];
+/** One tool for every canvas on screen; nested canvases draw with it too. */
+let TOOL = 'select';
+/** The selected ink element, whichever canvas it is on: `{ del(), clear() }`. */
+let SEL = null;
+
+function setTool(name) {
+  TOOL = name;
+  document.body.dataset.tool = name;
+  for (const b of document.querySelectorAll('.canvas-tools button')) b.classList.toggle('on', b.dataset.tool === name);
+}
+
+/** The scene after the name, or null when the body holds none. */
+function parseScene(body) {
+  try {
+    const scene = JSON.parse(body.slice(body.indexOf('\n\n') + 2));
+    if (scene && Array.isArray(scene.elements)) return scene.elements;
+  } catch {
+    // not a scene
+  }
+  return null;
+}
+const inkColor = () => getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#3b2f22';
+const inkId = () => `ink_${Math.random().toString(36).slice(2, 8)}`;
+
+function shape(type, x, y) {
+  return {
+    id: inkId(), type, x, y, width: 0, height: 0, angle: 0,
+    strokeColor: inkColor(), backgroundColor: 'transparent', fillStyle: 'solid',
+    strokeWidth: 2, strokeStyle: 'solid', roughness: 0, opacity: 100,
+    roundness: type === 'rectangle' ? { type: 3 } : null, isDeleted: false,
+    ...(type === 'line' || type === 'arrow' ? { points: [[0, 0], [0, 0]], startArrowhead: null, endArrowhead: type === 'arrow' ? 'arrow' : null } : {}),
+    ...(type === 'freedraw' ? { points: [[0, 0]], pressures: [], simulatePressure: true } : {}),
+    ...(type === 'text' ? { text: '', originalText: '', fontSize: 20, fontFamily: 2, textAlign: 'left', verticalAlign: 'top', lineHeight: 1.25 } : {}),
+  };
+}
+
+/** Where an element is, whichever way it was dragged. */
+function bbox(el) {
+  if (el.points) {
+    const xs = el.points.map((p) => p[0]);
+    const ys = el.points.map((p) => p[1]);
+    const x = Math.min(...xs);
+    const y = Math.min(...ys);
+    return { x: el.x + x, y: el.y + y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
+  }
+  return { x: el.x, y: el.y, width: el.width, height: el.height };
+}
+
+function svgEl(tag, attrs) {
+  const n = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+}
+
+/** One SVG node for one element. Crisp: no roughness, whatever the file says. */
+function inkNode(el) {
+  let n;
+  const abs = el.points ? el.points.map(([px, py]) => `${el.x + px},${el.y + py}`) : [];
+  switch (el.type) {
+    case 'rectangle':
+      n = svgEl('rect', { x: el.x, y: el.y, width: el.width, height: el.height, rx: el.roundness ? 8 : 0 });
+      break;
+    case 'ellipse':
+      n = svgEl('ellipse', { cx: el.x + el.width / 2, cy: el.y + el.height / 2, rx: el.width / 2, ry: el.height / 2 });
+      break;
+    case 'line':
+    case 'arrow':
+      n = svgEl('polyline', { points: abs.join(' ') });
+      if (el.endArrowhead || el.type === 'arrow') n.setAttribute('marker-end', 'url(#canvas-arrowhead)');
+      if (el.startArrowhead) n.setAttribute('marker-start', 'url(#canvas-arrowhead)');
+      break;
+    case 'freedraw':
+      n = svgEl('path', { d: abs.map((p, i) => `${i ? 'L' : 'M'}${p.replace(',', ' ')}`).join(' ') });
+      break;
+    case 'text': {
+      n = svgEl('text', { x: el.x, y: el.y, 'font-size': el.fontSize || 20, 'dominant-baseline': 'hanging' });
+      (el.text || '').split('\n').forEach((line, i) => {
+        const t = svgEl('tspan', { x: el.x, dy: i ? `${el.lineHeight || 1.25}em` : 0 });
+        t.textContent = line || ' ';
+        n.append(t);
+      });
+      n.setAttribute('fill', el.strokeColor);
+      break;
+    }
+    default:
+      return null;
+  }
+  n.dataset.id = el.id;
+  if (el.type !== 'text') {
+    n.setAttribute('stroke', el.strokeColor);
+    n.setAttribute('stroke-width', el.strokeWidth || 2);
+    n.setAttribute('fill', !el.backgroundColor || el.backgroundColor === 'transparent' ? 'none' : el.backgroundColor);
+  }
+  if (el.opacity != null && el.opacity !== 100) n.setAttribute('opacity', el.opacity / 100);
+  return n;
+}
 
 export default function (host) {
   const kernel = host.kernel();
@@ -66,6 +177,14 @@ export default function (host) {
   let current = host.pin.note;
   let trail = [current];
   let drag = null;
+  /** The paper's ink: an svg under the pins, its scene group, and the selection ring. */
+  let ink;
+  let inkScene;
+  let inkSel;
+  let inkDrawn = null;
+  let selected = null;
+  /** Where the pointer last was over the paper, so typing knows where to land. */
+  let last = null;
   /** Has this camera been moved by hand? Then `fit` keeps its hands off. */
   let touched = false;
 
@@ -155,6 +274,9 @@ export default function (host) {
     if (note === current || !kernel.hasNote(note)) return;
     kernel.setFocus(null);
     for (const id of [...kids.keys()]) drop(id);
+    select(null);
+    inkDrawn = null;
+    last = null;
     current = note;
     const i = trail.indexOf(note);
     if (i >= 0) trail.length = i + 1;
@@ -244,6 +366,135 @@ export default function (host) {
     });
   }
 
+  // --- ink -------------------------------------------------------------------
+
+  const elements = () => parseScene(body()) || [];
+
+  /** One write per gesture: the whole scene, one undo step. */
+  function writeInk(els) {
+    const name = nameOf(body());
+    const rest = els.length ? `\n\n${JSON.stringify({ type: 'excalidraw', version: 2, elements: els })}` : '';
+    kernel.journal.transact('ink', () => kernel.patch(current, `${name}${rest}`));
+  }
+
+  function drawInk() {
+    if (!ink) return;
+    const rest = body().slice(nameOf(body()).length);
+    if (rest === inkDrawn) return;
+    inkDrawn = rest;
+    inkScene.replaceChildren(...elements().filter((el) => !el.isDeleted).map(inkNode).filter(Boolean));
+    if (selected && !elements().some((el) => el.id === selected)) select(null);
+    drawSel();
+  }
+
+  function drawSel() {
+    const el = selected && elements().find((e) => e.id === selected);
+    inkSel.setAttribute('visibility', el ? 'visible' : 'hidden');
+    if (!el) return;
+    const b = bbox(el);
+    for (const [k, v] of Object.entries({ x: b.x - 4, y: b.y - 4, width: b.width + 8, height: b.height + 8 })) inkSel.setAttribute(k, v);
+  }
+
+  function select(id) {
+    selected = id;
+    if (SEL && SEL.owner === ink) SEL = null;
+    if (id) SEL = { owner: ink, del: () => writeInk(elements().filter((el) => el.id !== id)), clear: () => select(null) };
+    drawSel();
+  }
+
+  /** The ink element under the pointer, when the tool can touch ink. */
+  const inkAt = (e) => {
+    const n = e.target.closest ? e.target.closest('[data-id]') : null;
+    return n && inkScene.contains(n) ? elements().find((el) => el.id === n.dataset.id) : null;
+  };
+
+  /**
+   * Write on the paper: a small textarea over the element while typing, the
+   * element itself once you stop (Enter, Escape or a click elsewhere).
+   */
+  function editText(el, fresh, seed = '') {
+    const els = elements();
+    const node = inkScene.querySelector(`[data-id="${el.id}"]`);
+    if (node) node.style.visibility = 'hidden';
+    const area = document.createElement('textarea');
+    area.className = 'canvas-ink-edit';
+    area.style.left = `${el.x}px`;
+    area.style.top = `${el.y}px`;
+    area.style.fontSize = `${el.fontSize}px`;
+    area.value = fresh ? seed : el.text;
+    const size = () => {
+      const lines = area.value.split('\n');
+      area.rows = lines.length;
+      area.cols = Math.max(2, ...lines.map((l) => l.length + 1));
+    };
+    size();
+    area.addEventListener('input', size);
+    area.addEventListener('pointerdown', (e) => e.stopPropagation());
+    area.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        area.blur();
+      }
+    });
+    area.addEventListener('blur', () => {
+      area.remove();
+      if (node) node.style.visibility = '';
+      const text = area.value.replace(/\n+$/, '');
+      if (text === el.text) return;
+      const lines = text.split('\n');
+      const next = { ...el, text, originalText: text, width: Math.max(...lines.map((l) => l.length)) * el.fontSize * 0.5, height: lines.length * el.fontSize * 1.25 };
+      const kept = els.filter((x) => x.id !== el.id);
+      writeInk(text ? [...kept, next] : kept);
+    });
+    layer.append(area);
+    area.focus();
+    area.setSelectionRange(area.value.length, area.value.length);
+  }
+
+  function startText(point, seed = '') {
+    editText(shape('text', point.x, point.y), true, seed);
+  }
+
+  /** Follow the pointer while a shape is being dragged out or moved. */
+  function inkMove(e) {
+    const { el, node, start, points } = drag;
+    const p = at(e);
+    let dx = p.x - start.x;
+    let dy = p.y - start.y;
+    if (drag.mode === 'ink-move') {
+      drag.moved = { ...el, x: drag.origin.x + dx, y: drag.origin.y + dy };
+      node.replaceWith((drag.node = inkNode(drag.moved)));
+      return;
+    }
+    if (el.type === 'freedraw') points.push([dx, dy]);
+    else if (el.points) el.points = [[0, 0], [dx, dy]];
+    else {
+      if (e.shiftKey) {
+        const s = Math.max(Math.abs(dx), Math.abs(dy));
+        dx = Math.sign(dx) * s;
+        dy = Math.sign(dy) * s;
+      }
+      el.x = Math.min(start.x, start.x + dx);
+      el.y = Math.min(start.y, start.y + dy);
+      el.width = Math.abs(dx);
+      el.height = Math.abs(dy);
+    }
+    node.replaceWith((drag.node = inkNode(el)));
+  }
+
+  function inkEnd() {
+    const { el, node } = drag;
+    if (drag.mode === 'ink-move') {
+      if (drag.moved) writeInk(elements().map((x) => (x.id === el.id ? drag.moved : x)));
+      return;
+    }
+    node.remove();
+    const b = bbox(el);
+    if (b.width < 2 && b.height < 2) return;
+    if (el.points) Object.assign(el, { width: b.width, height: b.height });
+    writeInk([...elements(), el]);
+  }
+
   // --- children ------------------------------------------------------------
 
   function render() {
@@ -251,6 +502,7 @@ export default function (host) {
     const alive = new Set(children.map((p) => p.id));
     for (const id of [...kids.keys()]) if (!alive.has(id)) drop(id);
     for (const pin of children) ensure(pin);
+    drawInk();
     paint();
   }
 
@@ -498,13 +750,35 @@ export default function (host) {
         // Bare paper: out here that clears the selection; in a box, it selects the box.
         kernel.setFocus(outer ? null : host.pin.id);
         if (isTextField(document.activeElement)) document.activeElement.blur();
-        drag = { mode: 'pan', from: { x: e.clientX, y: e.clientY } };
         if (viewport.setPointerCapture) viewport.setPointerCapture(e.pointerId);
+        const hit = inkAt(e);
+        const p = at(e);
+        if (TOOL === 'eraser') {
+          if (hit) writeInk(elements().filter((el) => el.id !== hit.id));
+          drag = { mode: 'none' };
+        } else if (TOOL === 'select') {
+          select(hit ? hit.id : null);
+          if (hit) {
+            const node = inkScene.querySelector(`[data-id="${hit.id}"]`);
+            drag = { mode: 'ink-move', el: hit, node, start: p, origin: { x: hit.x, y: hit.y } };
+          } else drag = { mode: 'pan', from: { x: e.clientX, y: e.clientY } };
+        } else if (TOOL === 'text') {
+          if (hit && hit.type === 'text') editText(hit, false);
+          else startText(p);
+          drag = { mode: 'none' };
+        } else {
+          const el = shape(TOOL === 'pen' ? 'freedraw' : TOOL, p.x, p.y);
+          const node = inkNode(el);
+          ink.append(node);
+          drag = { mode: 'ink-draw', el, node, start: p, points: el.points };
+        }
+        e.preventDefault();
         return;
       }
 
       const pinId = box.dataset.pin;
       kernel.setFocus(pinId);
+      select(null);
 
       // The name is a field: a click there places a caret and nothing else.
       if (e.target.closest('.canvas-name')) return;
@@ -544,7 +818,12 @@ export default function (host) {
     });
 
     on(viewport, 'pointermove', (e) => {
-      if (!drag) return;
+      if (!boxAt(e)) last = at(e);
+      if (!drag || drag.mode === 'none') return;
+      if (drag.mode === 'ink-draw' || drag.mode === 'ink-move') {
+        inkMove(e);
+        return;
+      }
       const c = cam();
 
       if (drag.mode === 'pan') {
@@ -575,6 +854,7 @@ export default function (host) {
     });
 
     const end = () => {
+      if (drag && (drag.mode === 'ink-draw' || drag.mode === 'ink-move')) inkEnd();
       drag = null;
     };
     on(viewport, 'pointerup', end);
@@ -617,6 +897,11 @@ export default function (host) {
         return;
       }
       e.preventDefault();
+      const hit = inkAt(e);
+      if (hit) {
+        if (hit.type === 'text') editText(hit, false);
+        return;
+      }
       place(at(e));
     });
 
@@ -688,12 +973,19 @@ export default function (host) {
       // selection, out of the note. So Delete has something to delete.
       if (e.key === 'Escape') {
         if (isTextField(document.activeElement)) document.activeElement.blur();
+        else if (SEL) SEL.clear();
         else if (kernel.focus()) kernel.setFocus(null);
         else leave();
         return;
       }
 
       if (e.key === 'Backspace' || e.key === 'Delete') {
+        // Ink first: a selected element goes before a focused pin does.
+        if (SEL && !isTextField(document.activeElement)) {
+          e.preventDefault();
+          SEL.del();
+          return;
+        }
         const pin = kernel.focus();
         if (pin && (mod || !isTextField(document.activeElement))) {
           e.preventDefault();
@@ -708,9 +1000,20 @@ export default function (host) {
         return;
       }
 
-      // Nothing has the keyboard and you started typing: that is a text box. The
-      // key itself lands in it — focus moves before the browser inserts.
-      if (!mod && !e.altKey && e.key.length === 1) place(centre(), 'text', '\n');
+      if (mod || e.altKey || e.key.length !== 1) return;
+
+      // A letter alone picks a tool.
+      const tool = TOOLS.find((t) => t[1] === e.key);
+      if (tool) {
+        e.preventDefault();
+        setTool(tool[0]);
+        return;
+      }
+
+      // Nothing has the keyboard and you started typing: that is writing on the
+      // paper, where the pointer last was. The key lands in the new element.
+      e.preventDefault();
+      startText(last || centre(), e.key);
     });
   }
 
@@ -739,14 +1042,46 @@ export default function (host) {
       viewport.className = outer ? 'canvas-viewport' : 'canvas-inside';
       layer = document.createElement('div');
       layer.className = 'canvas-layer';
+      ink = svgEl('svg', { class: 'canvas-ink', width: 1, height: 1 });
+      const marker = svgEl('marker', {
+        id: 'canvas-arrowhead', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 5, markerHeight: 5, orient: 'auto-start-reverse',
+      });
+      marker.append(svgEl('path', { d: 'M1 1 L9 5 L1 9', fill: 'none', stroke: 'var(--ink)', 'stroke-width': 1.5 }));
+      const defs = svgEl('defs', {});
+      defs.append(marker);
+      inkScene = svgEl('g', { class: 'canvas-ink-scene' });
+      inkSel = svgEl('rect', { class: 'canvas-ink-sel', visibility: 'hidden' });
+      ink.append(defs, inkScene, inkSel);
+      layer.append(ink);
       viewport.append(layer);
       stage.append(viewport);
+      if (outer) {
+        const tools = document.createElement('div');
+        tools.className = 'canvas-tools';
+        for (const [name, key, glyph] of TOOLS) {
+          const b = document.createElement('button');
+          b.dataset.tool = name;
+          b.textContent = glyph;
+          b.title = `${name} (${key.toUpperCase()})`;
+          b.classList.toggle('on', name === TOOL);
+          on(b, 'click', () => {
+            setTool(name);
+            b.blur();
+          });
+          tools.append(b);
+        }
+        stage.append(tools);
+        document.body.dataset.tool = TOOL;
+      }
       root.append(stage);
 
       unwatch.push(
         kernel.watch((c) => {
           if (c.kind === 'patch') {
-            if (c.note === current) drawName();
+            if (c.note === current) {
+              drawName();
+              drawInk();
+            }
             for (const pin of kernel.childPins(current)) if (pin.note === c.note) drawBar(pin);
             return;
           }
@@ -792,6 +1127,7 @@ export default function (host) {
 
     unmount() {
       closeMenu();
+      if (SEL && SEL.owner === ink) SEL = null;
       stop.abort();
       for (const off of unwatch) off();
       unwatch.length = 0;

@@ -28,8 +28,7 @@ Shape (`version` is always `3`):
   `type`. The same Note can be pinned many times.
 - Pin `type` is how it is looked at. Lenses you can use:
   `canvas` (holds boxes) · `text` (its body; a `- [ ]` line is a checkbox) ·
-  `chat` (a conversation with you) · `sketch` (Excalidraw JSON after a blank
-  line, freedraw elements) · `image` (line two is `media/<file>`, then a blank
+  `chat` (a conversation with you) · `image` (line two is `media/<file>`, then a blank
   line, then a caption) · `web` (line two is a URL, then a blank line, then the
   page's cached text) · `terminal` (a shell in the repo; body is just the name,
   optional line two `cwd: <path>`). `code`, `tree`, `git-panel`, `split` are
@@ -74,6 +73,34 @@ The app has one runtime dependency, `@xterm/xterm` (with its `addon-fit`): a
 terminal emulator is the one thing not worth writing here. Types cannot import
 packages (they load from data URLs), so `src/main.ts` hands it to them as
 `globalThis.superflash.libs.xterm`. Do not add another.
+
+## Drawing on the paper
+
+A canvas note's body after its name is the ink on it: one blank line, then an
+Excalidraw scene. Coordinates are the same as pin `x`/`y`. Write it and the
+user sees it; empty means no ink.
+
+```
+Superflash
+
+{"type":"excalidraw","version":2,"elements":[
+ {"id":"r1","type":"rectangle","x":80,"y":80,"width":200,"height":120,
+  "strokeColor":"#3b2f22","backgroundColor":"transparent","strokeWidth":2,
+  "roughness":0,"roundness":{"type":3},"angle":0,"opacity":100,"isDeleted":false},
+ {"id":"a1","type":"arrow","x":280,"y":140,"width":120,"height":0,
+  "points":[[0,0],[120,0]],"endArrowhead":"arrow",
+  "strokeColor":"#3b2f22","strokeWidth":2,"roughness":0,"angle":0,"opacity":100,"isDeleted":false},
+ {"id":"t1","type":"text","x":80,"y":40,"width":120,"height":25,
+  "text":"a label","fontSize":20,"fontFamily":2,
+  "strokeColor":"#3b2f22","roughness":0,"angle":0,"opacity":100,"isDeleted":false}
+]}
+```
+
+- A rectangle or ellipse is `x, y, width, height`.
+- An arrow or line runs from `x, y` through `points` (offsets from `x, y`);
+  two points is one segment. `"endArrowhead":"arrow"` gives the head.
+- A label is a `text` element: `text`, `fontSize`, `fontFamily: 2`.
+- A pen stroke is `freedraw` with many `points`. Keep `roughness: 0`.
 
 ## Chats
 

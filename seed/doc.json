@@ -3,7 +3,7 @@
   "root": "note_1_root",
   "focus": null,
   "grants": [],
-  "modules": ["note_10_canvas", "note_11_tree", "note_12_git", "note_13_split", "note_14_text", "note_15_chat", "note_16_sketch", "note_17_image", "note_18_web", "note_19_terminal"],
+  "modules": ["note_10_canvas", "note_11_tree", "note_12_git", "note_13_split", "note_14_text", "note_15_chat", "note_17_image", "note_18_web", "note_19_terminal"],
   "notes": [
     { "id": "note_1_root", "body": "root" },
     { "id": "note_2_canvas", "body": "Superflash" },
@@ -14,7 +14,6 @@
     { "id": "note_13_split", "body": "@split.js" },
     { "id": "note_14_text", "body": "@text.js" },
     { "id": "note_15_chat", "body": "@chat.js" },
-    { "id": "note_16_sketch", "body": "@sketch.js" },
     { "id": "note_17_image", "body": "@image.js" },
     { "id": "note_18_web", "body": "@web.js" },
     { "id": "note_19_terminal", "body": "@terminal.js" }
