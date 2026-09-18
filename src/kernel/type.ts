@@ -29,6 +29,15 @@ export interface FsClient {
   /** The live document on disk, so an agent in the repo sees what you see. */
   readDoc(): Promise<{ body: string | null; mtime: number }>;
   writeDoc(body: string): Promise<{ mtime: number }>;
+  /**
+   * A shell in the repo, started in `cwd` (repo-relative, '' for the root).
+   * Output arrives through `onText` as it happens; `onExit` once, when it dies.
+   */
+  term(
+    cwd: string,
+    onText: (text: string) => void,
+    onExit: (code: number | null) => void,
+  ): Promise<{ write(data: string): void; close(): void }>;
 }
 
 /** What a Type looks like from the outside once it is registered. */

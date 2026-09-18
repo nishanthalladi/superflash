@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { IncomingMessage } from 'node:http';
@@ -248,6 +248,94 @@ export async function writeDocFile(root: string, body: unknown): Promise<{ mtime
   return { mtime: Math.round((await fs.stat(full)).mtimeMs) };
 }
 
+// --- terminal ---------------------------------------------------------------
+
+export interface TermEvent {
+  id?: string;
+  text?: string;
+  /** Sent once, when the shell exits. */
+  done?: number | null;
+}
+
+export interface Term {
+  id: string;
+  write(data: string): void;
+  kill(): void;
+}
+
+const terms = new Map<string, ChildProcess>();
+let termSeq = 0;
+
+/**
+ * pty.fork + a copy loop, instead of `pty.spawn`: on macOS spawn never notices
+ * the child has exited while our stdin pipe is still open. EOF on stdin, or the
+ * shell exiting, ends it; when node kills python the master closes and the shell
+ * gets SIGHUP from the kernel.
+ */
+const PTY = [
+  'import os,pty,select,sys',
+  'pid,fd=pty.fork()',
+  'if pid==0: os.execvp(sys.argv[1],sys.argv[1:])',
+  'while True:',
+  '  r=select.select([fd,0],[],[],0.2)[0]',
+  '  try:',
+  '    if fd in r: os.write(1,os.read(fd,65536))',
+  '    if 0 in r:',
+  '      d=os.read(0,65536)',
+  '      if d: os.write(fd,d)',
+  '      else: os.kill(pid,9)',
+  '  except OSError: pass',
+  '  p,st=os.waitpid(pid,os.WNOHANG)',
+  '  if p: break',
+  'try: os.write(1,os.read(fd,65536))',
+  'except OSError: pass',
+  'sys.exit(os.waitstatus_to_exitcode(st))',
+].join('\n');
+
+/**
+ * A real shell in the repo, as a stream of output. Node has no pty and we take
+ * no deps, so python3's stdlib `pty` wraps the shell — it is what `script` is,
+ * minus `script`'s insistence on a tty of its own (macOS `script` refuses a
+ * pipe). Bytes in go to the pty; bytes out come back through `emit`. Same trust
+ * as `/_ask`: dev only, your machine.
+ */
+export async function termOpen(
+  root: string,
+  cwd: unknown,
+  emit: (e: TermEvent) => void,
+  shell: string[] = ['zsh', '-il'],
+): Promise<Term> {
+  const dir = cwd ? await resolveSafe(root, String(cwd)) : root;
+  const id = `t${(termSeq += 1)}`;
+  const child = spawn('python3', ['-c', PTY, ...shell], {
+    cwd: dir,
+    shell: false,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, TERM: 'dumb', PROMPT_EOL_MARK: '' },
+  });
+  terms.set(id, child);
+  emit({ id });
+  child.stdout!.on('data', (c: Buffer) => emit({ text: c.toString() }));
+  child.stderr!.on('data', (c: Buffer) => emit({ text: c.toString() }));
+  child.on('error', (err) => emit({ text: `! ${err.message}\n` }));
+  child.on('close', (code) => {
+    terms.delete(id);
+    emit({ done: code });
+  });
+  return {
+    id,
+    write: (data) => void child.stdin!.write(data),
+    kill: () => void child.kill(),
+  };
+}
+
+export function termWrite(id: unknown, data: unknown): void {
+  const child = terms.get(String(id));
+  if (!child) throw new Refused(`no such terminal: ${String(id)}`);
+  if (typeof data !== 'string') throw new Refused('data must be a string');
+  child.stdin!.write(data);
+}
+
 // --- the plugin ------------------------------------------------------------
 
 const readBody = (req: IncomingMessage): Promise<unknown> =>
@@ -274,7 +362,7 @@ export function bridge(options: { root?: string } = {}): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = new URL(req.url ?? '/', 'http://superflash');
-        if (!url.pathname.startsWith('/_fs/') && !['/_git', '/_ask', '/_doc'].includes(url.pathname)) return next();
+        if (!url.pathname.startsWith('/_fs/') && !url.pathname.startsWith('/_term') && !['/_git', '/_ask', '/_doc'].includes(url.pathname)) return next();
 
         const send = (code: number, value: unknown): void => {
           res.statusCode = code;
@@ -306,6 +394,26 @@ export function bridge(options: { root?: string } = {}): Plugin {
             await ask(root, input.prompt, input.session, (e) => res.write(`${JSON.stringify(e)}\n`));
             return res.end();
           }
+          // --- terminal ---
+          if (url.pathname === '/_term') {
+            const input = (await readBody(req)) as { cwd?: unknown };
+            res.statusCode = 200;
+            res.setHeader('content-type', 'application/x-ndjson');
+            res.setHeader('cache-control', 'no-cache');
+            const term = await termOpen(root, input.cwd, (e) => {
+              res.write(`${JSON.stringify(e)}\n`);
+              if ('done' in e) res.end();
+            });
+            res.on('close', term.kill); // the box went away: so does the shell
+            return;
+          }
+          const inRoute = /^\/_term\/([\w]+)\/in$/.exec(url.pathname);
+          if (inRoute) {
+            const input = (await readBody(req)) as { data?: unknown };
+            termWrite(inRoute[1], input.data);
+            return send(200, {});
+          }
+          // --- end terminal ---
           return send(404, { error: 'no such route' });
         } catch (err) {
           const refused = err instanceof Refused;
