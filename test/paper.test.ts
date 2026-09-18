@@ -258,5 +258,13 @@ describe('drawing mode', () => {
     expect(document.body.classList.contains('drawing')).toBe(true);
     key('Escape'); // and away
     expect(document.body.classList.contains('drawing')).toBe(false);
+
+    // Arrows walk the tray, wrapping at both ends.
+    key('d', { metaKey: true, shiftKey: true });
+    key('ArrowDown');
+    expect(document.body.dataset['tool']).toBe('rectangle');
+    key('ArrowUp');
+    key('ArrowUp');
+    expect(document.body.dataset['tool']).toBe('eraser');
   });
 });

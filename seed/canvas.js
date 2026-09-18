@@ -1235,6 +1235,15 @@ export default function (host) {
         return;
       }
 
+      // In drawing mode the tray is a list: arrows walk it, wrapping.
+      if (document.body.classList.contains('drawing') && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && !isTextField(document.activeElement)) {
+        e.preventDefault();
+        const names = TOOLS.map(([name]) => name);
+        const i = names.indexOf(TOOL);
+        setTool(names[(i + (e.key === 'ArrowDown' ? 1 : names.length - 1)) % names.length]);
+        return;
+      }
+
       // Escape steps out one layer at a time: out of the drawing tool, out of the
       // text, out of the selection, out of the note. So Delete has something to delete.
       if (e.key === 'Escape') {
