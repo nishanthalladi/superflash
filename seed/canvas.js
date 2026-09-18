@@ -51,7 +51,7 @@ const nameOf = (body) => body.split('\n')[0] || '';
 
 const NS = 'http://www.w3.org/2000/svg';
 const TOOLS = [
-  ['select', 'v', '↖'], ['rectangle', 'r', '▢'], ['ellipse', 'o', '◯'], ['arrow', 'a', '→'],
+  ['select', 'v', '<svg viewBox="0 0 16 16" width="14" height="14"><path d="M3 2 L13 8 L8.5 9 L11 13.5 L9.5 14.2 L7 9.8 L3.5 13 Z" fill="currentColor"/></svg>'], ['rectangle', 'r', '▢'], ['ellipse', 'o', '◯'], ['arrow', 'a', '→'],
   ['line', 'l', '─'], ['pen', 'p', '✎'], ['text', 't', 'T'], ['eraser', 'e', '⌫'],
 ];
 /** One tool for every canvas on screen; nested canvases draw with it too. */
@@ -1061,7 +1061,8 @@ export default function (host) {
         for (const [name, key, glyph] of TOOLS) {
           const b = document.createElement('button');
           b.dataset.tool = name;
-          b.textContent = glyph;
+          if (glyph.startsWith('<svg')) b.innerHTML = glyph;
+          else b.textContent = glyph;
           b.title = `${name} (${key.toUpperCase()})`;
           b.classList.toggle('on', name === TOOL);
           on(b, 'click', () => {
