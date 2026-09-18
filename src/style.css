@@ -761,3 +761,100 @@ body {
   font-family: var(--mono);
   font-size: 11px;
 }
+
+/* --- ink: the paper is drawable ------------------------------------------ */
+
+/* Canvas coordinates: the svg sits at the layer's origin and overflows freely. */
+.canvas-ink {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.canvas-ink polyline,
+.canvas-ink path {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.canvas-ink text {
+  font-family: var(--prose);
+  white-space: pre;
+}
+
+/* Ink can only be grabbed when the tool touches ink. */
+body[data-tool='select'] .canvas-ink-scene > *,
+body[data-tool='eraser'] .canvas-ink-scene > *,
+body[data-tool='text'] .canvas-ink-scene > text {
+  pointer-events: all;
+}
+
+.canvas-ink-sel {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.canvas-ink-edit {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 1px solid var(--gold);
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--prose);
+  line-height: 1.25;
+  white-space: pre;
+}
+
+body[data-tool]:not([data-tool='select']) .canvas-viewport,
+body[data-tool]:not([data-tool='select']) .canvas-inside {
+  cursor: crosshair;
+}
+
+body[data-tool='text'] .canvas-viewport,
+body[data-tool='text'] .canvas-inside {
+  cursor: text;
+}
+
+.canvas-tools {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.canvas-tools button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.canvas-tools button:hover {
+  background: var(--paper-2);
+}
+
+.canvas-tools button.on {
+  background: var(--gold);
+}

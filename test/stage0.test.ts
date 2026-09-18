@@ -28,11 +28,11 @@ describe('what you see when it boots', () => {
     expect(kernel.getPin(shell!).type).toBe('canvas');
     expect(root.querySelector('.canvas-viewport')).not.toBeNull();
     expect(root.querySelectorAll('.canvas-layer > .pin').length).toBeGreaterThanOrEqual(1);
-    // No toolbar, no breadcrumb, no sidebar, nothing to click but the boxes.
+    // No breadcrumb, no sidebar, nothing to click but the boxes and the pen tray.
     expect(root.querySelector('.palette')).toBeNull();
     expect(root.querySelector('.tree')).toBeNull();
     expect(root.querySelector('.superflash-bar')).toBeNull();
-    expect(root.querySelectorAll('button')).toHaveLength(0);
+    expect(root.querySelectorAll('button:not(.canvas-tools button)')).toHaveLength(0);
   });
 
   it('keeps the canvas itself in the document, not in src', async () => {
