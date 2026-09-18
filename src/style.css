@@ -896,6 +896,11 @@ body[data-tool='select'] .canvas-tools {
   display: none;
 }
 
+/* `hidden` must beat the flex display on rows and headers. */
+.canvas-menu [hidden] {
+  display: none !important;
+}
+
 .canvas-menu-group {
   padding: 6px 10px 2px;
   color: var(--dim);
