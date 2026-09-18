@@ -485,6 +485,28 @@ export default function (host) {
     return made.id;
   }
 
+  /**
+   * The canvas box under the pointer, however deep, that could take `pinId`.
+   * The dragged box is lifted out of hit-testing so it does not cover the target.
+   */
+  function deepCanvasAt(e, pinId) {
+    if (typeof document.elementFromPoint !== 'function') return null;
+    const mine = kids.get(pinId);
+    const was = mine ? mine.box.style.pointerEvents : '';
+    if (mine) mine.box.style.pointerEvents = 'none';
+    let hit = document.elementFromPoint(e.clientX, e.clientY);
+    if (mine) mine.box.style.pointerEvents = was;
+    const moving = kernel.getPin(pinId).note;
+    for (let el = hit && hit.closest ? hit.closest('.pin') : null; el; el = el.parentElement && el.parentElement.closest('.pin')) {
+      const id = el.dataset.pin;
+      if (!kernel.hasPin(id)) continue;
+      const pin = kernel.getPin(id);
+      if (pin.type !== 'canvas' || pin.note === moving || kernel.contains(moving, pin.note)) continue;
+      return { pin: id, el };
+    }
+    return null;
+  }
+
   /** Every note somewhere shown as a canvas, the surface first, except `not` and what it holds. */
   const canvasNotes = (not) =>
     [...new Set(kernel.pinsOfType('canvas').map((p) => p.note))]
@@ -1117,13 +1139,18 @@ export default function (host) {
       }
       const dx = (e.clientX - drag.from.x) / c.z;
       const dy = (e.clientY - drag.from.y) / c.z;
+      drag.at = { clientX: e.clientX, clientY: e.clientY };
 
       if (drag.mode === 'move') {
         kernel.move(drag.pin, { x: snap(drag.start.x + dx), y: snap(drag.start.y + dy) });
-        // Over another canvas box: it lights up, and the drop goes inside it.
-        const over = canvasBoxAt(at(e), drag.pin);
-        drag.over = over ? over.id : null;
-        for (const [id, k] of kids) k.box.classList.toggle('drop-target', id === drag.over);
+        // Over a canvas box, at any depth: it lights up, and the drop goes inside it.
+        // Deep by the DOM where there is layout; by geometry among our own children otherwise (jsdom).
+        const shallow = canvasBoxAt(at(e), drag.pin);
+        const over = deepCanvasAt(e, drag.pin) || (shallow && kids.get(shallow.id) ? { pin: shallow.id, el: kids.get(shallow.id).box } : null);
+        if (drag.overEl && drag.overEl !== (over && over.el)) drag.overEl.classList.remove('drop-target');
+        drag.over = over ? over.pin : null;
+        drag.overEl = over ? over.el : null;
+        if (over) over.el.classList.add('drop-target');
       } else {
         kernel.move(drag.pin, {
           width: Math.max(MIN, snap(drag.start.width + dx)),
@@ -1135,8 +1162,13 @@ export default function (host) {
     const end = () => {
       if (drag && (drag.mode === 'ink-draw' || drag.mode === 'ink-move')) inkEnd();
       if (drag && drag.over) {
-        kids.get(drag.over)?.box.classList.remove('drop-target');
-        if (kernel.hasPin(drag.over)) reparent(drag.pin, kernel.getPin(drag.over).note, { x: GRID * 4, y: GRID * 5 });
+        if (drag.overEl) drag.overEl.classList.remove('drop-target');
+        if (kernel.hasPin(drag.over)) {
+          // Land where the pointer let go, in that canvas's own coordinates.
+          const inside = kernel.instance(drag.over);
+          const point = inside && inside.toLocal && drag.at ? inside.toLocal(drag.at) : { x: GRID * 4, y: GRID * 5 };
+          reparent(drag.pin, kernel.getPin(drag.over).note, point);
+        }
       }
       drag = null;
     };
@@ -1543,6 +1575,8 @@ export default function (host) {
     leave,
     reveal,
     retype,
+    /** Screen → this canvas's coordinates, for whoever drops something into it. */
+    toLocal: (e) => at(e),
     setView,
     get viewAs() {
       return views.get(current) || 'canvas';
