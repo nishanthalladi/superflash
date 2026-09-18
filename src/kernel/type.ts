@@ -33,6 +33,15 @@ export interface FsClient {
   media(name: string, type: string, base64: string): Promise<{ path: string }>;
   /** A web page, fetched server-side: its title and readable text. */
   web(url: string): Promise<{ title: string; text: string }>;
+  /**
+   * A shell in the repo, started in `cwd` (repo-relative, '' for the root).
+   * Output arrives through `onText` as it happens; `onExit` once, when it dies.
+   */
+  term(
+    cwd: string,
+    onText: (text: string) => void,
+    onExit: (code: number | null) => void,
+  ): Promise<{ write(data: string): void; close(): void }>;
 }
 
 /** What a Type looks like from the outside once it is registered. */

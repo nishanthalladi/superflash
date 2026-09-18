@@ -62,6 +62,7 @@ export function fakeFs(seed: Record<string, string> = {}) {
   const asked: { prompt: string; session?: string }[] = [];
   const media: { name: string; type: string; base64: string }[] = [];
   const fetched: string[] = [];
+  const terms: { cwd: string; typed: string[]; emit: (text: string) => void; exit: (code: number | null) => void }[] = [];
   let docFile: string | null = null;
   let docMtime = 0;
   let clock = 1;
@@ -108,6 +109,11 @@ export function fakeFs(seed: Record<string, string> = {}) {
       for (const piece of ['echo: ', prompt]) onText(piece);
       return { session: session ?? 'sess-1', cost: 0.01 };
     },
+    async term(cwd, onText, onExit) {
+      const typed: string[] = [];
+      terms.push({ cwd, typed, emit: onText, exit: onExit });
+      return { write: (data) => void typed.push(data), close: () => onExit(0) };
+    },
   };
 
   /** Somebody edited the file outside the app. */
@@ -123,7 +129,7 @@ export function fakeFs(seed: Record<string, string> = {}) {
     docMtime += 1;
   };
 
-  return { fs, files, outside, outsideDoc, doc: () => docFile, writes, ran, asked, media, fetched };
+  return { fs, files, outside, outsideDoc, doc: () => docFile, writes, ran, asked, media, fetched, terms };
 }
 
 /**

@@ -27,6 +27,25 @@ export function httpFs(base = ''): FsClient {
   const post = (url: string, input: unknown): Promise<unknown> =>
     json(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
 
+  /** Pump an ndjson response, one parsed line at a time. */
+  const each = async (res: Response, take: (ev: Record<string, unknown>) => void): Promise<void> => {
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    const line = (raw: string): void => {
+      if (raw.trim()) take(JSON.parse(raw) as Record<string, unknown>);
+    };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const parts = buf.split('\n');
+      buf = parts.pop() ?? '';
+      for (const p of parts) line(p);
+    }
+    line(buf);
+  };
+
   return {
     list: () => json('/_fs/list') as ReturnType<FsClient['list']>,
     read: (path) => json(`/_fs/read?path=${encodeURIComponent(path)}`) as ReturnType<FsClient['read']>,
@@ -43,28 +62,40 @@ export function httpFs(base = ''): FsClient {
         body: JSON.stringify({ prompt, session }),
       });
       if (!res.ok || !res.body) throw new Error(`${res.status} /_ask`);
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
       let done: { session: string; cost: number } | null = null;
-      const take = (line: string): void => {
-        if (!line.trim()) return;
-        const ev = JSON.parse(line) as { text?: string; done?: { session: string; cost: number }; error?: string };
-        if (ev.error) throw new Error(ev.error);
-        if (ev.text) onText(ev.text);
-        if (ev.done) done = ev.done;
-      };
-      for (;;) {
-        const { value, done: eof } = await reader.read();
-        if (eof) break;
-        buf += decoder.decode(value, { stream: true });
-        const parts = buf.split('\n');
-        buf = parts.pop() ?? '';
-        for (const p of parts) take(p);
-      }
-      take(buf);
+      await each(res, (ev) => {
+        if (ev['error']) throw new Error(String(ev['error']));
+        if (ev['text']) onText(String(ev['text']));
+        if (ev['done']) done = ev['done'] as { session: string; cost: number };
+      });
       if (!done) throw new Error('claude gave no result');
       return done;
+    },
+    async term(cwd, onText, onExit) {
+      const stop = new AbortController();
+      const res = await fetch(`${base}/_term`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cwd }),
+        signal: stop.signal,
+      });
+      if (!res.ok || !res.body) throw new Error(`${res.status} /_term`);
+      return new Promise((resolve, reject) => {
+        let id = '';
+        each(res, (ev) => {
+          if (ev['text']) onText(String(ev['text']));
+          if ('done' in ev) onExit(ev['done'] as number | null);
+          if (ev['id']) {
+            id = String(ev['id']);
+            resolve({
+              write: (data) => void post(`/_term/${id}/in`, { data }).catch(() => undefined),
+              close: () => stop.abort(),
+            });
+          }
+        }).catch((err: unknown) => {
+          if (!id) reject(err instanceof Error ? err : new Error(String(err)));
+        });
+      });
     },
   };
 }

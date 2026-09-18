@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DENY, MAX_BYTES, Refused, git, list, media, read, resolveSafe, write } from '../plugins/bridge';
+import { DENY, MAX_BYTES, Refused, git, list, media, read, resolveSafe, termOpen, termWrite, write } from '../plugins/bridge';
 
 let root: string;
 let outside: string;
@@ -132,5 +132,31 @@ describe('media', () => {
     await expect(media(root, 'a.js', 'text/javascript', png)).rejects.toThrow(Refused);
     await expect(media(root, 'a.png', 'image/jpeg', png)).rejects.toThrow(Refused);
     await expect(media(root, 'a.png', 'image/png', 42)).rejects.toThrow(Refused);
+  });
+});
+
+// --- terminal ---
+describe('terminal', () => {
+  it('runs a shell in the repo and streams what it prints', async () => {
+    const got: string[] = [];
+    let exit: number | null | undefined;
+    const term = await termOpen(root, 'src', (e) => {
+      if (e.text) got.push(e.text);
+      if ('done' in e) exit = e.done;
+    }, ['sh']);
+    expect(term.id).toMatch(/^t\d+$/);
+    termWrite(term.id, 'pwd; echo marker-$((20+3))\n');
+    for (let i = 0; i < 200 && !got.join('').includes('marker-23'); i += 1) await new Promise((r) => setTimeout(r, 25));
+    expect(got.join('')).toContain('marker-23');
+    expect(got.join('')).toContain(path.join('repo', 'src'));
+    term.write('exit\n');
+    for (let i = 0; i < 200 && exit === undefined; i += 1) await new Promise((r) => setTimeout(r, 25));
+    expect(exit).toBe(0);
+    expect(() => termWrite(term.id, 'x')).toThrow(Refused);
+  });
+
+  it('refuses a cwd outside the repo and a non-string keystroke', async () => {
+    await expect(termOpen(root, '../secrets', () => undefined, ['sh'])).rejects.toThrow(Refused);
+    expect(() => termWrite('nope', 'x')).toThrow(Refused);
   });
 });
