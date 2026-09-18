@@ -126,12 +126,8 @@ function setStroke(kernel, w) {
 const keyName = (e) => (e.shiftKey ? 'shift+' : '') + e.key.toLowerCase();
 /** What the menu shows on the right: `R`, `⇧R`. */
 const keyHint = (k) => (k || '').replace('shift+', '⇧').toUpperCase();
-/** Characters in order, anywhere: "cha" finds "chat", "rct" finds "rectangle". */
-function fuzzy(q, s) {
-  let i = 0;
-  for (const ch of s.toLowerCase()) if (ch === q[i]) i += 1;
-  return i === q.length;
-}
+/** Plain substring: "cha" finds chat, "rec" finds rectangle. Loose matching kept too much. */
+const fuzzy = (q, s) => s.toLowerCase().includes(q);
 
 /** The scene after the name, or null when the body holds none. */
 function parseScene(body) {
