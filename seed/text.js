@@ -7,11 +7,30 @@ export const type = { name: 'text', title: 'Text' };
  *
  * The name (line one) is drawn by the canvas this pin sits on, not here — the
  * bar around a box is the same for every Type.
+ *
+ * A line that starts `- [ ]` or `- [x]` is a task. Click the box in the gutter
+ * to flip it; the text is the truth, so an agent can tick one by editing text.
  */
+
+const TASK = /^(\s*)- \[( |x)\] /;
 
 const restOf = (body) => body.split('\n').slice(1).join('\n');
 const nameOf = (body) => body.split('\n')[0] || '';
 const join = (name, rest) => (rest === '' ? name : `${name}\n${rest}`);
+
+/** How wide one character of this font is — a proportional face has no `ch` to trust. */
+const widths = new Map();
+function charWidth(font) {
+  if (!widths.has(font)) {
+    const probe = document.createElement('span');
+    probe.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font:${font}`;
+    probe.textContent = '- [ ] - [ ] ';
+    document.body.append(probe);
+    widths.set(font, probe.getBoundingClientRect().width / 12 || 7);
+    probe.remove();
+  }
+  return widths.get(font);
+}
 
 /** Real ESM from a string, so a box can be run. No eval. */
 async function load(source) {
@@ -22,9 +41,52 @@ async function load(source) {
 export default function (host) {
   let text;
   let out;
+  let gutter;
 
   const body = () => host.read(host.pin.note);
-  const write = () => host.write(join(nameOf(body()), text.value));
+  const write = () => {
+    host.write(join(nameOf(body()), text.value));
+    drawTasks();
+  };
+
+  /**
+   * One checkbox per task line, laid exactly over its `[ ]` so the brackets are
+   * covered and the box reads as part of the line. Long lines that wrap put the
+   * later boxes off by a line; ponytail: fine for a list, revisit for prose.
+   */
+  function drawTasks() {
+    gutter.replaceChildren();
+    const lines = text.value.split('\n');
+    const cs = getComputedStyle(text);
+    const line = parseFloat(cs.lineHeight) || 20;
+    const top = parseFloat(cs.paddingTop) || 0;
+    const left = parseFloat(cs.paddingLeft) || 0;
+    const ch = charWidth(cs.font);
+    lines.forEach((l, i) => {
+      const m = TASK.exec(l);
+      if (!m) return;
+      const cover = document.createElement('label');
+      cover.className = 'text-task';
+      cover.style.top = `${top + i * line - text.scrollTop}px`;
+      cover.style.left = `${left + m[1].length * ch}px`;
+      cover.style.width = `${6 * ch}px`;
+      cover.style.justifyContent = 'flex-start';
+      cover.style.paddingLeft = `${ch}px`;
+      cover.style.height = `${line}px`;
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = m[2] === 'x';
+      cover.addEventListener('pointerdown', (e) => e.stopPropagation());
+      box.addEventListener('change', () => {
+        const all = text.value.split('\n');
+        all[i] = all[i].replace(TASK, `$1- [${box.checked ? 'x' : ' '}] `);
+        text.value = all.join('\n');
+        write();
+      });
+      cover.append(box);
+      gutter.append(cover);
+    });
+  }
 
   function show(value, bad = false) {
     out.classList.toggle('bad', bad);
@@ -80,7 +142,14 @@ export default function (host) {
       });
       out = document.createElement('div');
       out.className = 'text-out';
-      box.append(text, out);
+      gutter = document.createElement('div');
+      gutter.className = 'text-gutter';
+      const wrap = document.createElement('div');
+      wrap.className = 'text-wrap';
+      wrap.append(text, gutter);
+      text.addEventListener('scroll', drawTasks);
+      box.append(wrap, out);
+      drawTasks();
     },
 
     focus() {
@@ -98,6 +167,7 @@ export default function (host) {
       if (document.activeElement === text) return;
       const rest = restOf(note.body);
       if (text.value !== rest) text.value = rest;
+      drawTasks();
     },
 
     run,

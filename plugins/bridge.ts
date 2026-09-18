@@ -185,6 +185,7 @@ export function ask(root: string, prompt: unknown, session: unknown, emit: (e: A
     let sid = String(session ?? '');
     let cost = 0;
     let failed = '';
+    let spoke = false;
     const line = (raw: string): void => {
       if (!raw.trim()) return;
       let ev: Record<string, unknown>;
@@ -195,8 +196,12 @@ export function ask(root: string, prompt: unknown, session: unknown, emit: (e: A
       }
       if (typeof ev['session_id'] === 'string') sid = ev['session_id'];
       if (ev['type'] === 'stream_event') {
-        const inner = (ev['event'] as { type?: string; delta?: { type?: string; text?: string } }) ?? {};
+        const inner = (ev['event'] as { type?: string; delta?: { type?: string; text?: string }; content_block?: { type?: string } }) ?? {};
+        // A model that works in between (tool calls) writes several text blocks;
+        // without a break they run into one paragraph.
+        if (inner.type === 'content_block_start' && inner.content_block?.type === 'text' && spoke) emit({ text: '\n\n' });
         if (inner.type === 'content_block_delta' && inner.delta?.type === 'text_delta' && inner.delta.text) {
+          spoke = true;
           emit({ text: inner.delta.text });
         }
       }

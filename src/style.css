@@ -320,6 +320,40 @@ body {
   flex-direction: column;
 }
 
+.text-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Checkboxes float over the textarea's gutter; the `- [ ]` stays in the text. */
+.text-gutter {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.text-task {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.text-task input {
+  margin: 0;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--brown);
+  cursor: pointer;
+}
+
 .text-body {
   flex: 1;
   min-height: 0;
