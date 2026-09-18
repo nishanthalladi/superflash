@@ -129,7 +129,7 @@ describe('one menu: what do you want here?', () => {
     const labels = [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].map((b) => b.textContent);
     expect(labels).toContain('text');
     expect(labels).toContain('rectangle');
-    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw']);
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw', 'palette']);
 
     [...document.querySelectorAll<HTMLElement>('.canvas-menu button')].find((b) => b.textContent === 'text')!.click();
     const made = k.childPins(desk.id);
@@ -150,7 +150,7 @@ describe('one menu: what do you want here?', () => {
     const pin = k.pin(k.createNote('a').id, desk.id, 'canvas');
     mountCanvas(k, root, desk.id);
     root.querySelector<HTMLElement>('.canvas-plus')!.click();
-    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw']);
+    expect([...document.querySelectorAll('.canvas-menu-group')].map((g) => g.textContent)).toEqual(['add', 'draw', 'palette']);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(document.querySelector('.canvas-menu')).toBeNull();
 
@@ -181,11 +181,11 @@ describe('one menu: what do you want here?', () => {
     const { k, desk, root } = setup();
     k.types.define('plain', () => ({ mount() {} }), { title: 'plain' });
     mountCanvas(k, root, desk.id);
-    root.querySelector<HTMLElement>('.canvas-plus')!.click();
+    key('d', { metaKey: true, shiftKey: true }); // the palette has a chord of its own
     const menu = document.querySelector('.canvas-menu')!;
     expect(menu.querySelector('.canvas-menu-search')).not.toBeNull();
     const buttons = [...menu.querySelectorAll<HTMLElement>('button')];
-    expect(buttons.length).toBe(k.types.list().filter((t) => t.lens !== false).length + 6); // six draws
+    expect(buttons.length).toBe(k.types.list().filter((t) => t.lens !== false).length + 7); // six draws and the palette's own row
     for (const b of buttons) expect(b.querySelector('svg')).not.toBeNull();
     const rect = buttons.find((b) => b.textContent === 'rectangle')!;
     const hint = rect.querySelector<HTMLElement>('.canvas-menu-key')!;

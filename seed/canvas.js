@@ -90,7 +90,7 @@ function setTool(name) {
 // --- settings: a note in the document, so an agent can rebind by editing text ---
 
 const SETTINGS = 'superflash:settings';
-const DEFAULT_KEYS = { select: 'v', rectangle: 'r', ellipse: 'o', arrow: 'a', line: 'l', pen: 'p', text: 't', eraser: 'e' };
+const DEFAULT_KEYS = { palette: 'cmd+shift+d', select: 'v', rectangle: 'r', ellipse: 'o', arrow: 'a', line: 'l', pen: 'p', text: 't', eraser: 'e' };
 const STROKES = [1, 2, 4];
 /** Shared by every canvas on screen, like TOOL. */
 let KEYS = { ...DEFAULT_KEYS };
@@ -768,7 +768,8 @@ export default function (host) {
       bind: `add:${t.name}`,
       on: () => place(point, t.name, t.name === 'canvas' ? '' : '\n'),
     }));
-    menu(x, y, [...add, ...draw], true);
+    const self = { group: 'palette', label: 'this menu', icon: ICONS.keys, key: KEYS.palette, bind: 'palette', on: () => undefined };
+    menu(x, y, [...add, ...draw, self], true);
   }
 
   /** A box's bar: how to look at it, and what to do with it. */
@@ -1171,7 +1172,10 @@ export default function (host) {
     const bound = Object.keys(KEYS).find((k) => KEYS[k] && KEYS[k] === name);
     if (!bound) return false;
     e.preventDefault();
-    if (bound.startsWith('add:')) {
+    if (bound === 'palette') {
+      const r = viewport.getBoundingClientRect();
+      paperMenu(r.left + r.width / 2 - 120, r.top + r.height / 2 - 180, last || centre());
+    } else if (bound.startsWith('add:')) {
       const t = bound.slice(4);
       if (kernel.types.has(t)) place(last || centre(), t, t === 'canvas' ? '' : '\n');
     } else setTool(bound);

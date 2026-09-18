@@ -108,7 +108,7 @@ Keys live in the document too: the note with id `superflash:settings`, body
 `Settings`, a blank line, then JSON:
 
 ```
-{"keys":{"select":"v","rectangle":"r","ellipse":"o","arrow":"a","line":"l",
+{"keys":{"palette":"cmd+shift+d","select":"v","rectangle":"r","ellipse":"o","arrow":"a","line":"l",
  "pen":"p","text":"t","eraser":"e","add:chat":"","add:terminal":""},"stroke":2}
 ```
 
